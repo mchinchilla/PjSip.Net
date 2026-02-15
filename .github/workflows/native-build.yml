@@ -22,11 +22,23 @@ jobs:
       - name: Copy config_site.h
         run: copy native\config_site.h pjproject\pjlib\include\pj\config_site.h
 
+      - name: Build BCG729
+        shell: powershell
+        run: |
+          git clone --branch 1.1.1 --depth 1 https://github.com/BelledonneCommunications/bcg729.git bcg729
+          cmake -S bcg729 -B bcg729-build -G "Visual Studio 17 2022" -A x64 `
+              -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}\bcg729-install" `
+              -DENABLE_TESTS=OFF
+          cmake --build bcg729-build --config Release
+          cmake --install bcg729-build --config Release
+
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
       - name: Build pjproject (full solution)
         shell: powershell
+        env:
+          CL: /I"${{ github.workspace }}\bcg729-install\include"
         run: |
           # Build full solution; samples may fail to link but libraries will be produced
           & msbuild pjproject\pjproject-vs14.sln /p:Configuration=Release /p:Platform=x64 /m /v:minimal
@@ -67,6 +79,7 @@ jobs:
              /I"..\..\..\..\pjmedia\include" ^
              /I"..\..\..\..\pjsip\include" ^
              /I"..\..\..\..\pjnath\include" ^
+             /I"%GITHUB_WORKSPACE%\bcg729-install\include" ^
              /c pjsua2_wrap.cpp /Fo:pjsua2_wrap.obj
 
       - name: Collect pjproject lib paths
@@ -87,6 +100,7 @@ jobs:
           echo Linking with: %PJLIBS%
           link /nologo /DLL /OUT:pjsua2.dll pjsua2_wrap.obj ^
                %PJLIBS% ^
+               "%GITHUB_WORKSPACE%\bcg729-install\lib\bcg729.lib" ^
                ws2_32.lib Iphlpapi.lib dsound.lib dxguid.lib netapi32.lib ^
                mswsock.lib ole32.lib user32.lib gdi32.lib advapi32.lib ^
                Secur32.lib Crypt32.lib
@@ -123,10 +137,20 @@ jobs:
       - name: Copy config_site.h
         run: cp native/config_site.h pjproject/pjlib/include/pj/config_site.h
 
+      - name: Build BCG729
+        run: |
+          git clone --branch 1.1.1 --depth 1 https://github.com/BelledonneCommunications/bcg729.git bcg729
+          cmake -S bcg729 -B bcg729-build \
+              -DCMAKE_OSX_ARCHITECTURES=arm64 \
+              -DCMAKE_INSTALL_PREFIX="$GITHUB_WORKSPACE/bcg729-install" \
+              -DENABLE_TESTS=OFF
+          cmake --build bcg729-build --config Release
+          cmake --install bcg729-build --config Release
+
       - name: Configure pjproject
         run: |
           cd pjproject
-          ./configure
+          ./configure --with-bcg729="$GITHUB_WORKSPACE/bcg729-install"
           make dep
 
       - name: Build pjproject libraries
@@ -176,6 +200,7 @@ jobs:
           g++ -shared -arch arm64 -o libpjsua2.dylib \
               pjsua2_wrap.o \
               $pj_libs \
+              -L"$GITHUB_WORKSPACE/bcg729-install/lib" -lbcg729 \
               -framework CoreAudio -framework AudioToolbox -framework AVFoundation \
               -framework CoreMedia -framework Security -framework SystemConfiguration \
               -framework Foundation -framework Network \
@@ -207,13 +232,23 @@ jobs:
       - name: Copy config_site.h
         run: cp native/config_site.h pjproject/pjlib/include/pj/config_site.h
 
+      - name: Build BCG729
+        run: |
+          git clone --branch 1.1.1 --depth 1 https://github.com/BelledonneCommunications/bcg729.git bcg729
+          cmake -S bcg729 -B bcg729-build \
+              -DCMAKE_OSX_ARCHITECTURES=x86_64 \
+              -DCMAKE_INSTALL_PREFIX="$GITHUB_WORKSPACE/bcg729-install" \
+              -DENABLE_TESTS=OFF
+          cmake --build bcg729-build --config Release
+          cmake --install bcg729-build --config Release
+
       - name: Configure pjproject for x86_64
         run: |
           cd pjproject
           export CFLAGS="-arch x86_64"
           export CXXFLAGS="-arch x86_64"
           export LDFLAGS="-arch x86_64"
-          ./configure --host=x86_64-apple-darwin
+          ./configure --host=x86_64-apple-darwin --with-bcg729="$GITHUB_WORKSPACE/bcg729-install"
           make dep
 
       - name: Build pjproject libraries
@@ -262,6 +297,7 @@ jobs:
           clang++ -shared -arch x86_64 -o libpjsua2.dylib \
               pjsua2_wrap.o \
               $pj_libs \
+              -L"$GITHUB_WORKSPACE/bcg729-install/lib" -lbcg729 \
               -framework CoreAudio -framework AudioToolbox -framework AVFoundation \
               -framework CoreMedia -framework Security -framework SystemConfiguration \
               -framework Foundation -framework Network \
@@ -299,13 +335,28 @@ jobs:
       - name: Copy config_site.h
         run: cp native/config_site.h pjproject/pjlib/include/pj/config_site.h
 
+      - name: Build BCG729
+        env:
+          ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: |
+          git clone --branch 1.1.1 --depth 1 https://github.com/BelledonneCommunications/bcg729.git bcg729
+          cmake -S bcg729 -B bcg729-build \
+              -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_ROOT/build/cmake/android.toolchain.cmake" \
+              -DANDROID_ABI=arm64-v8a \
+              -DANDROID_PLATFORM=android-28 \
+              -DCMAKE_INSTALL_PREFIX="$GITHUB_WORKSPACE/bcg729-install" \
+              -DENABLE_TESTS=OFF
+          cmake --build bcg729-build --config Release
+          cmake --install bcg729-build --config Release
+
       - name: Configure pjproject
         env:
           ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
           TARGET_ABI: arm64-v8a
         run: |
           cd pjproject
-          ./configure-android --use-ndk-cflags --disable-ssl
+          ./configure-android --use-ndk-cflags --disable-ssl \
+              --with-bcg729="$GITHUB_WORKSPACE/bcg729-install"
           make dep
 
       - name: Build pjproject libraries
@@ -365,6 +416,7 @@ jobs:
           $CC -shared -o libpjsua2.so \
               pjsua2_wrap.o \
               $pj_libs \
+              -L"$GITHUB_WORKSPACE/bcg729-install/lib" -lbcg729 \
               -lOpenSLES -llog -landroid \
               -latomic -lm
 
@@ -394,6 +446,20 @@ jobs:
       - name: Copy config_site.h
         run: cp native/config_site.h pjproject/pjlib/include/pj/config_site.h
 
+      - name: Build BCG729
+        run: |
+          IOS_SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
+          git clone --branch 1.1.1 --depth 1 https://github.com/BelledonneCommunications/bcg729.git bcg729
+          cmake -S bcg729 -B bcg729-build \
+              -DCMAKE_SYSTEM_NAME=iOS \
+              -DCMAKE_OSX_ARCHITECTURES=arm64 \
+              -DCMAKE_OSX_SYSROOT="$IOS_SDK" \
+              -DCMAKE_OSX_DEPLOYMENT_TARGET=16.0 \
+              -DCMAKE_INSTALL_PREFIX="$GITHUB_WORKSPACE/bcg729-install" \
+              -DENABLE_TESTS=OFF
+          cmake --build bcg729-build --config Release
+          cmake --install bcg729-build --config Release
+
       - name: Configure pjproject for iOS
         run: |
           cd pjproject
@@ -403,7 +469,8 @@ jobs:
           export LDFLAGS="-arch arm64 -isysroot $IOS_SDK -miphoneos-version-min=16.0"
           ./configure --host=aarch64-apple-darwin \
               --disable-sdl --disable-ffmpeg --disable-v4l2 \
-              --disable-openh264 --disable-vpx --disable-libyuv
+              --disable-openh264 --disable-vpx --disable-libyuv \
+              --with-bcg729="$GITHUB_WORKSPACE/bcg729-install"
           make dep
 
       - name: Build pjproject libraries for iOS
@@ -474,6 +541,7 @@ jobs:
               pjsua2_wrap.o \
               $objc_objs \
               $pj_libs \
+              -L"$GITHUB_WORKSPACE/bcg729-install/lib" -lbcg729 \
               -framework CoreAudio -framework AudioToolbox -framework AVFoundation \
               -framework CoreMedia -framework Security -framework SystemConfiguration \
               -framework Foundation -framework Network -framework UIKit \

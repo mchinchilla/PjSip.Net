@@ -79,6 +79,7 @@
 #define PJMEDIA_HAS_SPEEX_CODEC       1
 #define PJMEDIA_HAS_ILBC_CODEC        1
 #define PJMEDIA_HAS_OPUS_CODEC        1
+#define PJMEDIA_HAS_BCG729            1
 
 /* Use the bundled third-party Ogg for Opus. */
 #define PJMEDIA_HAS_LIBYUV            0

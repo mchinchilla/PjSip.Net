@@ -27,7 +27,7 @@ Compatible with **WinForms** · **WPF** · **MAUI** · **Console**
 | 📞 | **Call Management** | Make, receive, hold, transfer, and record calls |
 | 🔒 | **Native TLS** | Schannel (Windows), Secure Transport (macOS/iOS) — no OpenSSL needed |
 | 👥 | **Presence & BLF** | Monitor user availability with SUBSCRIBE/NOTIFY |
-| 🎙️ | **Audio Control** | Device selection, volume, mute, codec management |
+| 🎙️ | **Audio Control** | Device selection, volume, mute, codec management (G.711, G.729, Opus, Speex, GSM, iLBC) |
 | 🔀 | **Conferencing** | Multi-party audio bridge with merge/split |
 | 💬 | **SIP Messaging** | Send and receive text messages via SIP MESSAGE (RFC 3428) |
 | 📊 | **Call Quality** | Real-time RTP stats, jitter, packet loss, MOS score |
@@ -274,7 +274,7 @@ options.Transports.Add(new SipTransportOptions
 
 > **Windows:** TLS uses Schannel (OS native). No need to install OpenSSL.
 > **macOS/iOS:** Uses system Secure Transport.
-> **Android:** Requires precompiled OpenSSL (included in native package).
+> **Android:** SSL is currently disabled. To enable: build OpenSSL for Android and set `PJ_HAS_SSL_SOCK=1` in config_site.h.
 
 ### 🌐 NAT/STUN/ICE/TURN
 
@@ -680,7 +680,7 @@ public interface ISipCodecManager
 
 | Property | Type | Description |
 |---|---|---|
-| `CodecId` | `string` | Codec identifier (e.g., `"PCMU/8000"`, `"opus/48000"`) |
+| `CodecId` | `string` | Codec identifier (e.g., `"PCMU/8000"`, `"opus/48000"`, `"G729/8000"`) |
 | `Description` | `string` | Human-readable codec description |
 | `Priority` | `int` | Current priority (0-255, 0 = disabled) |
 | `ClockRate` | `int` | Sampling frequency in Hz |
@@ -832,7 +832,6 @@ public interface ISipCallRecorder : IDisposable
 | Value | Description |
 |---|---|
 | `Wav` | Uncompressed WAV format |
-| `Mp3` | Compressed MP3 format |
 
 ---
 
@@ -1181,8 +1180,6 @@ var recorder = phone.Recorder;
 
 // Start recording
 recorder.StartRecording(call, @"C:\recordings\call-001.wav");
-// or in MP3:
-recorder.StartRecording(call, @"C:\recordings\call-001.mp3", RecordingFormat.Mp3);
 
 // Check status
 Console.WriteLine($"Recording: {recorder.IsRecording}");
@@ -1861,7 +1858,7 @@ graph TB
 | <img src="https://img.shields.io/badge/Windows-0078D6?logo=windows&logoColor=white" alt="Windows" /> | `win-x64` | Schannel | `PjSip.Net.Native.Win64` |
 | <img src="https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white" alt="macOS" /> x64 | `osx-x64` | Apple SSL | `PjSip.Net.Native.MacOS` |
 | <img src="https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white" alt="macOS" /> ARM64 | `osx-arm64` | Apple SSL | `PjSip.Net.Native.MacOS` |
-| <img src="https://img.shields.io/badge/Android-3DDC84?logo=android&logoColor=white" alt="Android" /> ARM64 | `android-arm64` | OpenSSL | `PjSip.Net.Native.Android` |
+| <img src="https://img.shields.io/badge/Android-3DDC84?logo=android&logoColor=white" alt="Android" /> ARM64 | `android-arm64` | Disabled | `PjSip.Net.Native.Android` |
 | <img src="https://img.shields.io/badge/iOS-000000?logo=ios&logoColor=white" alt="iOS" /> ARM64 | `ios-arm64` | Secure Transport | `PjSip.Net.Native.iOS` |
 
 ---
@@ -1885,21 +1882,14 @@ dotnet test tests/PjSip.Net.Tests.Unit/PjSip.Net.Tests.Unit.csproj
 
 ```powershell
 # Windows x64 (PowerShell)
-./native/scripts/build-win-x64.ps1
+./native/build-win.ps1
 
 # macOS (bash)
-./native/scripts/build-macos-arm64.sh   # Apple Silicon
-./native/scripts/build-macos-x64.sh     # Intel
+./native/build-macos.sh
 
 # Mobile (bash)
-./native/scripts/build-android-arm64.sh
-./native/scripts/build-ios-arm64.sh
-```
-
-### Generate SWIG wrappers
-
-```powershell
-./native/scripts/generate-swig.ps1
+./native/build-android.sh
+./native/build-ios.sh
 ```
 
 ### Create NuGet packages
