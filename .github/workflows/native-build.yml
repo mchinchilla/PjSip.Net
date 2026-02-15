@@ -53,6 +53,20 @@ jobs:
           # Don't fail the step — library .lib files are built before samples fail
           exit 0
 
+      - name: Recompile BCG729 codec wrapper (fix static linking)
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
+          cl /nologo /MD /O2 /DNDEBUG /D_LIB /DBCG729_STATIC_DEFINE ^
+             /I"pjproject\pjlib\include" ^
+             /I"pjproject\pjlib-util\include" ^
+             /I"pjproject\pjmedia\include" ^
+             /I"pjproject\pjsip\include" ^
+             /I"pjproject\pjnath\include" ^
+             /I"%GITHUB_WORKSPACE%\bcg729-install\include" ^
+             /c pjproject\pjmedia\src\pjmedia-codec\bcg729.c ^
+             /Fo:bcg729_static.obj
+
       - name: List built libraries
         shell: powershell
         run: |
@@ -94,7 +108,7 @@ jobs:
         shell: powershell
         run: |
           $libs = Get-ChildItem -Path "$env:GITHUB_WORKSPACE\pjproject" -Recurse -Filter *.lib |
-                  Where-Object { $_.DirectoryName -match '\\lib$' }
+                  Where-Object { $_.DirectoryName -match '\\lib$' -and $_.Name -notmatch '^libpjproject' }
           Write-Host "Found $($libs.Count) pjproject .lib files:"
           $libs | ForEach-Object { Write-Host "  $($_.FullName)" }
           $libList = ($libs | ForEach-Object { "`"$($_.FullName)`"" }) -join " "
@@ -107,6 +121,7 @@ jobs:
           cd pjproject\pjsip-apps\src\swig\csharp
           echo Linking with: %PJLIBS%
           link /nologo /DLL /OUT:pjsua2.dll pjsua2_wrap.obj ^
+               "%GITHUB_WORKSPACE%\bcg729_static.obj" ^
                %PJLIBS% ^
                "%GITHUB_WORKSPACE%\bcg729-install\lib\bcg729.lib" ^
                ws2_32.lib Iphlpapi.lib dsound.lib dxguid.lib netapi32.lib ^
