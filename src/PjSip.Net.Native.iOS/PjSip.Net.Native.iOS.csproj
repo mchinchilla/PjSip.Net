@@ -9,7 +9,13 @@
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <ProduceReferenceAssembly>false</ProduceReferenceAssembly>
     <NoDefaultExcludes>true</NoDefaultExcludes>
+    <IncludeSymbols>false</IncludeSymbols>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\icon.png" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
   <ItemGroup>
     <Content Include="runtimes\ios-arm64\native\**" PackagePath="runtimes/ios-arm64/native" />

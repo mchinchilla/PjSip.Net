@@ -1,0 +1,86 @@
+name: Release to NuGet
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  DOTNET_VERSION: '10.0.x'
+  DOTNET_QUALITY: 'preview'
+  CONFIGURATION: Release
+
+jobs:
+  release:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+          dotnet-quality: ${{ env.DOTNET_QUALITY }}
+
+      - name: Extract version from tag
+        id: version
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF#refs/tags/v}"
+          # Split into prefix and suffix: v1.0.0-alpha.1 -> 1.0.0 + alpha.1
+          if [[ "$TAG" == *-* ]]; then
+            echo "prefix=${TAG%%-*}" >> "$GITHUB_OUTPUT"
+            echo "suffix=${TAG#*-}" >> "$GITHUB_OUTPUT"
+          else
+            echo "prefix=$TAG" >> "$GITHUB_OUTPUT"
+            echo "suffix=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: >
+          dotnet build --no-restore -c ${{ env.CONFIGURATION }}
+          -p:VersionPrefix=${{ steps.version.outputs.prefix }}
+          -p:VersionSuffix=${{ steps.version.outputs.suffix }}
+          -p:ContinuousIntegrationBuild=true
+
+      - name: Test
+        run: dotnet test --no-build -c ${{ env.CONFIGURATION }}
+
+      - name: Pack
+        shell: pwsh
+        run: |
+          $projects = @(
+            "src/PjSip.Net.Native.Win64/PjSip.Net.Native.Win64.csproj",
+            "src/PjSip.Net.Native.MacOS/PjSip.Net.Native.MacOS.csproj",
+            "src/PjSip.Net.Native.Android/PjSip.Net.Native.Android.csproj",
+            "src/PjSip.Net.Native.iOS/PjSip.Net.Native.iOS.csproj",
+            "src/PjSip.Net.Interop/PjSip.Net.Interop.csproj",
+            "src/PjSip.Net/PjSip.Net.csproj"
+          )
+          foreach ($project in $projects) {
+            dotnet pack $project --no-build -c ${{ env.CONFIGURATION }} -o artifacts `
+              -p:VersionPrefix=${{ steps.version.outputs.prefix }} `
+              -p:VersionSuffix=${{ steps.version.outputs.suffix }}
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-packages
+          path: artifacts/*
+
+      - name: Push to NuGet.org
+        run: >
+          dotnet nuget push "artifacts/*.nupkg"
+          --api-key ${{ secrets.NUGET_API_KEY }}
+          --source https://api.nuget.org/v3/index.json
+          --skip-duplicate
