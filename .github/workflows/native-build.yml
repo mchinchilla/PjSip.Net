@@ -35,7 +35,7 @@ jobs:
           # Compile all BCG729 C sources into a true static .lib (cmake produces a DLL import lib)
           $inc = "$env:GITHUB_WORKSPACE\bcg729-install\include"
           $lib = "$env:GITHUB_WORKSPACE\bcg729-install\lib\bcg729.lib"
-          cmd /c "`"C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat`" x64 && cd bcg729\src && cl /nologo /MD /O2 /DNDEBUG /DBCG729_STATIC_DEFINE /I..\include /I`"$inc`" /c *.c && lib /nologo /OUT:`"$lib`" *.obj"
+          cmd /c "`"C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat`" x64 && cd bcg729\src && cl /nologo /MD /O2 /DNDEBUG /DBCG729_STATIC /I..\include /I`"$inc`" /c *.c && lib /nologo /OUT:`"$lib`" *.obj"
           if ($LASTEXITCODE -ne 0) { throw "BCG729 build failed" }
           Write-Host "BCG729 static lib built:" (Get-Item $lib).Length "bytes"
 
@@ -45,7 +45,7 @@ jobs:
       - name: Build pjproject (full solution)
         shell: powershell
         env:
-          CL: /I"${{ github.workspace }}\bcg729-install\include" /DBCG729_STATIC_DEFINE
+          CL: /I"${{ github.workspace }}\bcg729-install\include" /DBCG729_STATIC
         run: |
           # Build full solution; samples may fail to link but libraries will be produced
           & msbuild pjproject\pjproject-vs14.sln /p:Configuration=Release /p:Platform=x64 /m /v:minimal
@@ -57,7 +57,7 @@ jobs:
         shell: cmd
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
-          cl /nologo /MD /O2 /DNDEBUG /D_LIB /DBCG729_STATIC_DEFINE ^
+          cl /nologo /MD /O2 /DNDEBUG /D_LIB /DBCG729_STATIC ^
              /I"pjproject\pjlib\include" ^
              /I"pjproject\pjlib-util\include" ^
              /I"pjproject\pjmedia\include" ^
@@ -101,7 +101,7 @@ jobs:
              /I"..\..\..\..\pjsip\include" ^
              /I"..\..\..\..\pjnath\include" ^
              /I"%GITHUB_WORKSPACE%\bcg729-install\include" ^
-             /DBCG729_STATIC_DEFINE ^
+             /DBCG729_STATIC ^
              /c pjsua2_wrap.cpp /Fo:pjsua2_wrap.obj
 
       - name: Collect pjproject lib paths
@@ -526,7 +526,7 @@ jobs:
               -I"pjlib/include" -I"pjlib-util/include" -I"pjmedia/include" \
               -I"pjsip/include" -I"pjnath/include" \
               -I"$GITHUB_WORKSPACE/bcg729-install/include" \
-              -DPJ_AUTOCONF=1 -DBCG729_STATIC_DEFINE \
+              -DPJ_AUTOCONF=1 -DBCG729_STATIC \
               -O2 -c pjmedia/src/pjmedia-codec/bcg729.c -o bcg729.o
           CODEC_LIB=$(find . -name "libpjmedia-codec-*.a" -path "*/lib/*" | head -1)
           echo "Adding bcg729.o to $CODEC_LIB"
