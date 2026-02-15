@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using PjSip.Net.Calls;
 using PjSip.Net.Internal;
+using PjSip.Net.Interop.Generated;
 
 namespace PjSip.Net.Recording;
 
@@ -10,6 +11,7 @@ internal sealed class SipCallRecorder : ISipCallRecorder
     private readonly ILogger _logger;
     private volatile bool _disposed;
     private ISipCall? _recordingCall;
+    private AudioMediaRecorder? _recorder;
 
     public SipCallRecorder(
         PjSipEndpointManager endpointManager,
@@ -35,11 +37,24 @@ internal sealed class SipCallRecorder : ISipCallRecorder
 
         _logger.LogInformation("Started recording call {CallId} to {FilePath}", call.Id, filePath);
 
-        // TODO: When SWIG-generated classes are available:
-        // 1. Create AudioMediaRecorder
-        // 2. recorder.createRecorder(filePath)
-        // 3. Get call's AudioMedia
-        // 4. audioMedia.startTransmit(recorder)
+        if (call is ManagedCall managed && managed.AudioMedia is not null)
+        {
+            _endpointManager.Invoker.Invoke(() =>
+            {
+                try
+                {
+                    _recorder = new AudioMediaRecorder();
+                    _recorder.createRecorder(filePath);
+                    managed.AudioMedia.startTransmit(_recorder);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error starting native recording for call {CallId}", call.Id);
+                    _recorder?.Dispose();
+                    _recorder = null;
+                }
+            });
+        }
 
         RecordingStateChanged?.Invoke(this, new RecordingStateChangedEventArgs
         {
@@ -56,9 +71,22 @@ internal sealed class SipCallRecorder : ISipCallRecorder
 
         _logger.LogInformation("Stopped recording call {CallId}", _recordingCall?.Id);
 
-        // TODO: When SWIG-generated classes are available:
-        // 1. Stop transmit to recorder
-        // 2. Destroy recorder
+        if (_recorder is not null && _recordingCall is ManagedCall managed && managed.AudioMedia is not null)
+        {
+            _endpointManager.Invoker.Invoke(() =>
+            {
+                try
+                {
+                    managed.AudioMedia.stopTransmit(_recorder);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Error stopping native recording");
+                }
+                _recorder.Dispose();
+                _recorder = null;
+            });
+        }
 
         var call = _recordingCall;
         var filePath = CurrentFilePath;

@@ -1,18 +1,23 @@
 using Microsoft.Extensions.Logging;
 using PjSip.Net.Events;
+using PjSip.Net.Interop.Generated;
 using PjSip.Net.Presence;
+using Gen = PjSip.Net.Interop.Generated;
+using BuddyInfo = PjSip.Net.Presence.BuddyInfo;
 
 namespace PjSip.Net.Internal;
 
 /// <summary>
-/// Internal adapter that will subclass pj.Buddy to bridge pjsua2 callbacks
-/// to .NET events. Until SWIG-generated classes are available, this serves
-/// as the managed-side buddy/presence state holder.
+/// Managed-side buddy that bridges pjsua2 Buddy callbacks to .NET events.
+/// Uses an internal <see cref="NativeBuddyBridge"/> (SWIG Director) when
+/// native binaries are available; otherwise operates in stub mode for tests.
 /// </summary>
 internal sealed class ManagedBuddy : ISipBuddy
 {
     private readonly PjSipEndpointManager _endpointManager;
     private readonly ILogger _logger;
+    private NativeBuddyBridge? _native;
+    private ManagedAccount? _account;
     private volatile bool _disposed;
 
     public ManagedBuddy(
@@ -37,18 +42,33 @@ internal sealed class ManagedBuddy : ISipBuddy
 
     public event EventHandler<BuddyStateChangedEventArgs>? StateChanged;
 
+    /// <summary>
+    /// Sets the account reference for creating the native buddy subscription.
+    /// </summary>
+    internal void SetAccount(ManagedAccount account) => _account = account;
+
     public async Task SubscribeAsync(CancellationToken ct = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+
+        if (!NativeAvailability.IsAvailable || _account?.Native is null)
+        {
+            _logger.LogInformation("Subscribing to presence for {Uri} (stub mode)", Uri);
+            return;
+        }
 
         await _endpointManager.Invoker.InvokeAsync(() =>
         {
             _logger.LogInformation("Subscribing to presence for {Uri}", Uri);
 
-            // TODO: When SWIG-generated classes are available:
-            // 1. Create pj.BuddyConfig with the URI
-            // 2. Call nativeBuddy.create(account, buddyConfig)
-            // 3. Call nativeBuddy.subscribePresence(true)
+            _native ??= new NativeBuddyBridge(this, _logger);
+
+            using var cfg = new BuddyConfig();
+            cfg.uri = Uri;
+            cfg.subscribe = true;
+
+            _native.create(_account.Native!, cfg);
+            _native.subscribePresence(true);
         });
     }
 
@@ -56,12 +76,16 @@ internal sealed class ManagedBuddy : ISipBuddy
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
+        if (_native is null)
+        {
+            _logger.LogInformation("Unsubscribing from presence for {Uri} (stub mode)", Uri);
+            return;
+        }
+
         await _endpointManager.Invoker.InvokeAsync(() =>
         {
             _logger.LogInformation("Unsubscribing from presence for {Uri}", Uri);
-
-            // TODO: When SWIG-generated classes are available:
-            // 1. Call nativeBuddy.subscribePresence(false)
+            _native.subscribePresence(false);
         });
     }
 
@@ -87,6 +111,43 @@ internal sealed class ManagedBuddy : ISipBuddy
         });
     }
 
+    /// <summary>
+    /// Called from the native bridge when buddy state changes.
+    /// </summary>
+    internal void OnNativeBuddyState()
+    {
+        if (_native is null) return;
+
+        try
+        {
+            var info = _native.getInfo();
+            var status = info.presStatus.status;
+            var newState = status switch
+            {
+                pjsua_buddy_status.PJSUA_BUDDY_STATUS_ONLINE => BuddyState.Online,
+                pjsua_buddy_status.PJSUA_BUDDY_STATUS_OFFLINE => BuddyState.Offline,
+                _ => BuddyState.Unknown
+            };
+
+            // Refine based on activity
+            if (newState == BuddyState.Online)
+            {
+                newState = info.presStatus.activity switch
+                {
+                    pjrpid_activity.PJRPID_ACTIVITY_AWAY => BuddyState.Away,
+                    pjrpid_activity.PJRPID_ACTIVITY_BUSY => BuddyState.Busy,
+                    _ => BuddyState.Online
+                };
+            }
+
+            SetState(newState, info.presStatus.statusText);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error reading buddy state for {Uri}", Uri);
+        }
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
@@ -95,6 +156,49 @@ internal sealed class ManagedBuddy : ISipBuddy
         if (State is not BuddyState.Offline and not BuddyState.Unknown)
         {
             try { UnsubscribeAsync().GetAwaiter().GetResult(); } catch { /* best effort */ }
+        }
+
+        _native?.Dispose();
+        _native = null;
+    }
+
+    /// <summary>
+    /// SWIG Director subclass of <see cref="Gen.Buddy"/> that receives
+    /// native pjsua2 callbacks and delegates them to the parent ManagedBuddy.
+    /// </summary>
+    private sealed class NativeBuddyBridge : Gen.Buddy
+    {
+        private readonly ManagedBuddy _managed;
+        private readonly ILogger _logger;
+
+        public NativeBuddyBridge(ManagedBuddy managed, ILogger logger) : base()
+        {
+            _managed = managed;
+            _logger = logger;
+        }
+
+        public override void onBuddyState()
+        {
+            try
+            {
+                _managed.OnNativeBuddyState();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in onBuddyState callback");
+            }
+        }
+
+        public override void onBuddyEvSubState(OnBuddyEvSubStateParam prm)
+        {
+            try
+            {
+                _managed.OnNativeBuddyState();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in onBuddyEvSubState callback");
+            }
         }
     }
 }

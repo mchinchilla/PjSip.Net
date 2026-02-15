@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using PjSip.Net.Accounts;
 using PjSip.Net.Internal;
+using PjSip.Net.Interop.Generated;
 
 namespace PjSip.Net.Messaging;
 
@@ -22,15 +23,29 @@ internal sealed class SipMessaging : ISipMessaging
 
     public async Task SendMessageAsync(ISipAccount account, string destinationUri, string body, string contentType = "text/plain", CancellationToken ct = default)
     {
-        await _endpointManager.Invoker.InvokeAsync(() =>
+        if (account is SipAccount sipAccount && sipAccount.Inner.Native is not null)
         {
-            _logger.LogInformation("Sending SIP MESSAGE from {Account} to {Destination}", account.Uri, destinationUri);
+            await _endpointManager.Invoker.InvokeAsync(() =>
+            {
+                _logger.LogInformation("Sending SIP MESSAGE from {Account} to {Destination}", account.Uri, destinationUri);
 
-            // TODO: When SWIG-generated classes are available:
-            // 1. Create SendInstantMessageParam
-            // 2. Set contentType, body
-            // 3. Call account.sendInstantMessage(param)
-        });
+                // Create a temporary buddy to send the instant message
+                using var buddy = new Buddy();
+                using var buddyCfg = new BuddyConfig();
+                buddyCfg.uri = destinationUri;
+                buddyCfg.subscribe = false;
+                buddy.create(sipAccount.Inner.Native, buddyCfg);
+
+                using var prm = new SendInstantMessageParam();
+                prm.content = body;
+                prm.contentType = contentType;
+                buddy.sendInstantMessage(prm);
+            });
+        }
+        else
+        {
+            _logger.LogInformation("Sending SIP MESSAGE from {Account} to {Destination} (stub mode)", account.Uri, destinationUri);
+        }
     }
 
     internal void OnMessageReceived(SipMessage message)

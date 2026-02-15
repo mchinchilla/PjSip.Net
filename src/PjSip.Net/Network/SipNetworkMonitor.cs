@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using PjSip.Net.Internal;
+using PjSip.Net.Interop.Generated;
 
 namespace PjSip.Net.Network;
 
@@ -27,14 +28,23 @@ internal sealed class SipNetworkMonitor : ISipNetworkMonitor
         var oldState = CurrentState;
         CurrentState = NetworkState.Changed;
 
-        await _endpointManager.Invoker.InvokeAsync(() =>
+        var ep = _endpointManager.Endpoint;
+        if (ep is not null)
         {
-            _logger.LogInformation("Handling network change, re-registering transports and accounts");
+            await _endpointManager.Invoker.InvokeAsync(() =>
+            {
+                _logger.LogInformation("Handling network change, re-registering transports and accounts");
 
-            // TODO: When SWIG-generated classes are available:
-            // 1. Call ep.handleIpChange(IpChangeParam)
-            // 2. This triggers transport restart and re-registration
-        });
+                using var ipChangeParam = new IpChangeParam();
+                ipChangeParam.restartListener = true;
+                ipChangeParam.restartLisDelay = 100;
+                ep.handleIpChange(ipChangeParam);
+            });
+        }
+        else
+        {
+            _logger.LogInformation("Handling network change (stub mode)");
+        }
 
         CurrentState = NetworkState.Connected;
         NetworkStateChanged?.Invoke(this, new NetworkStateChangedEventArgs

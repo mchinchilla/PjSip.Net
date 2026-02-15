@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using PjSip.Net.Events;
 using PjSip.Net.Internal;
+using PjSip.Net.Interop.Generated;
 
 namespace PjSip.Net.Presence;
 
@@ -14,6 +15,7 @@ internal sealed class SipPresenceManager : ISipPresenceManager
     private readonly ILogger _logger;
     private readonly List<ManagedBuddy> _buddies = [];
     private readonly object _lock = new();
+    private ManagedAccount? _account;
 
     public SipPresenceManager(
         PjSipEndpointManager endpointManager,
@@ -32,9 +34,17 @@ internal sealed class SipPresenceManager : ISipPresenceManager
 
     public event EventHandler<BuddyStateChangedEventArgs>? BuddyStateChanged;
 
+    /// <summary>
+    /// Sets the account to use for presence operations.
+    /// </summary>
+    internal void SetAccount(ManagedAccount account) => _account = account;
+
     public ISipBuddy AddBuddy(string uri)
     {
         var buddy = new ManagedBuddy(uri, _endpointManager, _logger);
+        if (_account is not null)
+            buddy.SetAccount(_account);
+
         lock (_lock) _buddies.Add(buddy);
         buddy.StateChanged += OnBuddyStateChanged;
 
@@ -61,13 +71,35 @@ internal sealed class SipPresenceManager : ISipPresenceManager
     {
         MyState = state;
 
+        if (_account?.Native is null)
+        {
+            _logger.LogInformation("Setting my presence to {State} ({StatusText}) (stub mode)", state, statusText);
+            return;
+        }
+
         await _endpointManager.Invoker.InvokeAsync(() =>
         {
             _logger.LogInformation("Setting my presence to {State} ({StatusText})", state, statusText);
 
-            // TODO: When SWIG-generated classes are available:
-            // 1. Build pj.PresenceStatus from state + statusText
-            // 2. Call account.setOnlineStatus(presenceStatus)
+            using var presStatus = new PresenceStatus();
+            presStatus.status = state switch
+            {
+                BuddyState.Online => pjsua_buddy_status.PJSUA_BUDDY_STATUS_ONLINE,
+                BuddyState.Offline => pjsua_buddy_status.PJSUA_BUDDY_STATUS_OFFLINE,
+                _ => pjsua_buddy_status.PJSUA_BUDDY_STATUS_ONLINE
+            };
+
+            presStatus.activity = state switch
+            {
+                BuddyState.Away => pjrpid_activity.PJRPID_ACTIVITY_AWAY,
+                BuddyState.Busy or BuddyState.OnThePhone => pjrpid_activity.PJRPID_ACTIVITY_BUSY,
+                _ => pjrpid_activity.PJRPID_ACTIVITY_UNKNOWN
+            };
+
+            if (statusText is not null)
+                presStatus.statusText = statusText;
+
+            _account.Native!.setOnlineStatus(presStatus);
         });
     }
 

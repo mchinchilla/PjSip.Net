@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using PjSip.Net.Calls;
 using PjSip.Net.Internal;
+using PjSip.Net.Interop.Generated;
 
 namespace PjSip.Net.Conference;
 
@@ -26,22 +27,72 @@ internal sealed class SipConferenceBridge : ISipConferenceBridge
 
     public void AddParticipant(ISipCall call)
     {
-        lock (_lock) _participants.Add(call);
+        ISipCall[] existingParticipants;
+        lock (_lock)
+        {
+            existingParticipants = _participants.ToArray();
+            _participants.Add(call);
+        }
+
         _logger.LogInformation("Added call {CallId} to conference bridge", call.Id);
 
-        // TODO: When SWIG-generated classes are available:
-        // 1. Get AudioMedia from the call
-        // 2. Connect all existing participants' AudioMedia to this one
-        // 3. Connect this one's AudioMedia to all existing participants
+        if (call is ManagedCall managed && managed.AudioMedia is not null)
+        {
+            _endpointManager.Invoker.Invoke(() =>
+            {
+                // Connect this call's audio to all existing participants bidirectionally
+                foreach (var existing in existingParticipants)
+                {
+                    if (existing is ManagedCall existingManaged && existingManaged.AudioMedia is not null)
+                    {
+                        try
+                        {
+                            managed.AudioMedia.startTransmit(existingManaged.AudioMedia);
+                            existingManaged.AudioMedia.startTransmit(managed.AudioMedia);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Error connecting conference audio between {Call1} and {Call2}",
+                                call.Id, existing.Id);
+                        }
+                    }
+                }
+            });
+        }
     }
 
     public void RemoveParticipant(ISipCall call)
     {
-        lock (_lock) _participants.Remove(call);
+        ISipCall[] remainingParticipants;
+        lock (_lock)
+        {
+            _participants.Remove(call);
+            remainingParticipants = _participants.ToArray();
+        }
+
         _logger.LogInformation("Removed call {CallId} from conference bridge", call.Id);
 
-        // TODO: When SWIG-generated classes are available:
-        // 1. Disconnect this call's AudioMedia from all others
+        if (call is ManagedCall managed && managed.AudioMedia is not null)
+        {
+            _endpointManager.Invoker.Invoke(() =>
+            {
+                foreach (var remaining in remainingParticipants)
+                {
+                    if (remaining is ManagedCall remainingManaged && remainingManaged.AudioMedia is not null)
+                    {
+                        try
+                        {
+                            managed.AudioMedia.stopTransmit(remainingManaged.AudioMedia);
+                            remainingManaged.AudioMedia.stopTransmit(managed.AudioMedia);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Error disconnecting conference audio for {CallId}", call.Id);
+                        }
+                    }
+                }
+            });
+        }
     }
 
     public void MergeAll(IEnumerable<ISipCall> calls)
@@ -54,8 +105,28 @@ internal sealed class SipConferenceBridge : ISipConferenceBridge
 
         _logger.LogInformation("Merged {Count} calls into conference", _participants.Count);
 
-        // TODO: When SWIG-generated classes are available:
-        // 1. For each pair of calls, connect their AudioMedia ports
+        _endpointManager.Invoker.Invoke(() =>
+        {
+            var managedCalls = _participants.OfType<ManagedCall>()
+                .Where(c => c.AudioMedia is not null).ToArray();
+
+            // Connect all pairs bidirectionally
+            for (int i = 0; i < managedCalls.Length; i++)
+            {
+                for (int j = i + 1; j < managedCalls.Length; j++)
+                {
+                    try
+                    {
+                        managedCalls[i].AudioMedia!.startTransmit(managedCalls[j].AudioMedia!);
+                        managedCalls[j].AudioMedia!.startTransmit(managedCalls[i].AudioMedia!);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Error connecting conference pair");
+                    }
+                }
+            }
+        });
     }
 
     public void SplitAll()
@@ -69,8 +140,45 @@ internal sealed class SipConferenceBridge : ISipConferenceBridge
 
         _logger.LogInformation("Split {Count} calls from conference", toSplit.Count);
 
-        // TODO: When SWIG-generated classes are available:
-        // 1. Disconnect all AudioMedia cross-connections
-        // 2. Reconnect each call to default sound device only
+        _endpointManager.Invoker.Invoke(() =>
+        {
+            var managedCalls = toSplit.OfType<ManagedCall>()
+                .Where(c => c.AudioMedia is not null).ToArray();
+
+            // Disconnect all pairs
+            for (int i = 0; i < managedCalls.Length; i++)
+            {
+                for (int j = i + 1; j < managedCalls.Length; j++)
+                {
+                    try
+                    {
+                        managedCalls[i].AudioMedia!.stopTransmit(managedCalls[j].AudioMedia!);
+                        managedCalls[j].AudioMedia!.stopTransmit(managedCalls[i].AudioMedia!);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Error disconnecting conference pair");
+                    }
+                }
+            }
+
+            // Reconnect each call to default sound device
+            var ep = _endpointManager.Endpoint;
+            if (ep is not null)
+            {
+                foreach (var mc in managedCalls)
+                {
+                    try
+                    {
+                        var playMedia = ep.audDevManager().getPlaybackDevMedia();
+                        mc.AudioMedia!.startTransmit(playMedia);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Error reconnecting call to sound device");
+                    }
+                }
+            }
+        });
     }
 }

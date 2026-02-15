@@ -22,7 +22,7 @@ internal sealed class SipPhone : ISipPhone
     private readonly SipPhoneOptions _options;
     private readonly ILogger<SipPhone> _logger;
     private readonly List<SipAccount> _accounts = [];
-    private readonly SipAudioManager _audioManager = new();
+    private readonly SipAudioManager _audioManager;
     private readonly SipCodecManager _codecManager;
     private readonly SipPresenceManager _presenceManager;
     private readonly SipMessaging _messaging;
@@ -44,6 +44,7 @@ internal sealed class SipPhone : ISipPhone
         _options = options.Value;
         _logger = logger;
 
+        _audioManager = new SipAudioManager(endpointManager);
         _codecManager = new SipCodecManager(endpointManager, logger);
         _presenceManager = new SipPresenceManager(endpointManager, logger);
         _messaging = new SipMessaging(endpointManager, logger);
@@ -53,6 +54,9 @@ internal sealed class SipPhone : ISipPhone
         _qualityMonitor = new SipCallQualityMonitor(endpointManager, logger);
         _callHistory = new SipCallHistory(_options.CallHistoryMaxEntries);
         _networkMonitor = new SipNetworkMonitor(endpointManager, logger);
+
+        // Wire transport state events from endpoint manager
+        _endpointManager.TransportStateChanged += (s, e) => TransportStateChanged?.Invoke(this, e);
     }
 
     public SipPhoneState State { get; private set; } = SipPhoneState.Idle;
@@ -191,10 +195,16 @@ internal sealed class SipPhone : ISipPhone
     private SipAccount AddAccountInternal(SipAccountOptions options)
     {
         var managed = new ManagedAccount(options, _endpointManager, _logger);
+        managed.SetMessaging(_messaging);
         var account = new SipAccount(managed);
         account.RegistrationStateChanged += OnAccountRegistrationStateChanged;
         account.IncomingCall += OnAccountIncomingCall;
         account.MwiStateChanged += OnAccountMwiStateChanged;
+
+        // Wire presence manager to first account
+        if (_accounts.Count == 0)
+            _presenceManager.SetAccount(managed);
+
         lock (_lock) _accounts.Add(account);
         return account;
     }

@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using PjSip.Net.Internal;
+using PjSip.Net.Interop.Generated;
 
 namespace PjSip.Net.Tones;
 
@@ -7,6 +8,7 @@ internal sealed class SipToneGenerator : ISipToneGenerator
 {
     private readonly PjSipEndpointManager _endpointManager;
     private readonly ILogger _logger;
+    private ToneGenerator? _toneGen;
     private volatile bool _disposed;
 
     public SipToneGenerator(
@@ -37,12 +39,47 @@ internal sealed class SipToneGenerator : ISipToneGenerator
         ObjectDisposedException.ThrowIf(_disposed, this);
         IsPlaying = true;
 
-        // TODO: When SWIG-generated classes are available:
-        // 1. Create ToneGenerator
-        // 2. For each descriptor, create ToneDesc with freq/on/off
-        // 3. Call toneGen.createToneGenerator()
-        // 4. toneGen.play(tones)
-        // 5. Connect to sound device
+        var ep = _endpointManager.Endpoint;
+        if (ep is null) return;
+
+        _endpointManager.Invoker.Invoke(() =>
+        {
+            try
+            {
+                // Clean up previous tone generator
+                _toneGen?.Dispose();
+
+                _toneGen = new ToneGenerator();
+                _toneGen.createToneGenerator();
+
+                using var toneDescVec = new ToneDescVector();
+                foreach (var desc in tones)
+                {
+                    var td = new ToneDesc
+                    {
+                        freq1 = (short)desc.Frequency1,
+                        freq2 = (short)desc.Frequency2,
+                        on_msec = (short)desc.OnMs,
+                        off_msec = (short)desc.OffMs,
+                        volume = (short)desc.Volume
+                    };
+                    toneDescVec.Add(td);
+                }
+
+                _toneGen.play(toneDescVec, true);
+
+                // Connect to playback device
+                var playMedia = ep.audDevManager().getPlaybackDevMedia();
+                _toneGen.startTransmit(playMedia);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error playing tones");
+                _toneGen?.Dispose();
+                _toneGen = null;
+                IsPlaying = false;
+            }
+        });
     }
 
     public void PlayRingbackTone()
@@ -75,9 +112,29 @@ internal sealed class SipToneGenerator : ISipToneGenerator
         IsPlaying = false;
         _logger.LogDebug("Stopped tone playback");
 
-        // TODO: When SWIG-generated classes are available:
-        // 1. Stop the tone generator
-        // 2. Disconnect from sound device
+        if (_toneGen is not null)
+        {
+            _endpointManager.Invoker.Invoke(() =>
+            {
+                try
+                {
+                    _toneGen.stop();
+
+                    var ep = _endpointManager.Endpoint;
+                    if (ep is not null)
+                    {
+                        var playMedia = ep.audDevManager().getPlaybackDevMedia();
+                        _toneGen.stopTransmit(playMedia);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Error stopping tone generator");
+                }
+                _toneGen.Dispose();
+                _toneGen = null;
+            });
+        }
     }
 
     public void Dispose()
