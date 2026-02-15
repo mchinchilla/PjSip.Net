@@ -1825,7 +1825,7 @@ graph TB
         Win["Win64 — pjsua2.dll"]
         Mac["MacOS — libpjsua2.dylib"]
         And["Android — libpjsua2.so"]
-        iOS["iOS — libpjsua2.a"]
+        iOS["iOS — libpjsua2.dylib"]
     end
 
     App --> SDK
@@ -1882,7 +1882,7 @@ dotnet test tests/PjSip.Net.Tests.Unit/PjSip.Net.Tests.Unit.csproj
 
 ```powershell
 # Windows x64 (PowerShell)
-./native/build-win.ps1
+./native/build-win64.ps1
 
 # macOS (bash)
 ./native/build-macos.sh
