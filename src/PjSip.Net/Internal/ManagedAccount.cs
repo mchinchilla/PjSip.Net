@@ -41,7 +41,8 @@ internal sealed class ManagedAccount : ISipAccount
         _endpointManager = endpointManager;
         _logger = logger;
         Id = Guid.NewGuid().ToString("N")[..8];
-        Uri = $"sip:{options.Username}@{options.Domain}";
+        var sipUser = options.Username.Replace("@", "%40");
+        Uri = $"sip:{sipUser}@{options.Domain}";
     }
 
     public string Id { get; }
@@ -93,9 +94,10 @@ internal sealed class ManagedAccount : ISipAccount
             _native ??= new NativeAccountBridge(this, _logger);
 
             using var acfg = new AccountConfig();
+            var sipUser = Options.Username.Replace("@", "%40");
             acfg.idUri = Options.DisplayName is not null
-                ? $"\"{Options.DisplayName}\" <sip:{Options.Username}@{Options.Domain}>"
-                : $"sip:{Options.Username}@{Options.Domain}";
+                ? $"\"{Options.DisplayName}\" <sip:{sipUser}@{Options.Domain}>"
+                : $"sip:{sipUser}@{Options.Domain}";
 
             // Registration config
             acfg.regConfig.registrarUri = Options.Registrar ?? $"sip:{Options.Domain}";
