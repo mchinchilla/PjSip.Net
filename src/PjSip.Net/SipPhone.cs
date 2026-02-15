@@ -224,8 +224,11 @@ internal sealed class SipPhone : ISipPhone
     private void OnAccountRegistrationStateChanged(object? sender, RegistrationStateChangedEventArgs e) =>
         RegistrationStateChanged?.Invoke(this, e);
 
-    private void OnAccountIncomingCall(object? sender, IncomingCallEventArgs e) =>
+    private void OnAccountIncomingCall(object? sender, IncomingCallEventArgs e)
+    {
+        e.Call.StateChanged += OnCallStateChanged;
         IncomingCall?.Invoke(this, e);
+    }
 
     private void OnAccountMwiStateChanged(object? sender, MwiStateChangedEventArgs e) =>
         MwiStateChanged?.Invoke(this, e);
