@@ -61,13 +61,17 @@ internal sealed class ManagedBuddy : ISipBuddy
         {
             _logger.LogInformation("Subscribing to presence for {Uri}", Uri);
 
-            _native ??= new NativeBuddyBridge(this, _logger);
+            if (_native is null)
+            {
+                _native = new NativeBuddyBridge(this, _logger);
 
-            using var cfg = new BuddyConfig();
-            cfg.uri = Uri;
-            cfg.subscribe = true;
+                using var cfg = new BuddyConfig();
+                cfg.uri = Uri;
+                cfg.subscribe = true;
 
-            _native.create(_account.Native!, cfg);
+                _native.create(_account.Native!, cfg);
+            }
+
             _native.subscribePresence(true);
         });
     }
@@ -92,7 +96,11 @@ internal sealed class ManagedBuddy : ISipBuddy
     internal void SetState(BuddyState newState, string? statusText = null)
     {
         var oldState = State;
-        if (oldState == newState) return;
+        var oldStatusText = Info.StatusText;
+
+        // Skip if nothing changed (state AND statusText both identical)
+        if (oldState == newState && oldStatusText == statusText) return;
+
         State = newState;
 
         Info = Info with
@@ -122,6 +130,9 @@ internal sealed class ManagedBuddy : ISipBuddy
         {
             var info = _native.getInfo();
             var status = info.presStatus.status;
+            _logger.LogDebug("Buddy {Uri} native state: status={Status} activity={Activity} statusText={Text}",
+                Uri, status, info.presStatus.activity, info.presStatus.statusText);
+
             var newState = status switch
             {
                 pjsua_buddy_status.PJSUA_BUDDY_STATUS_ONLINE => BuddyState.Online,
@@ -140,6 +151,18 @@ internal sealed class ManagedBuddy : ISipBuddy
                 };
             }
 
+            // BLF hint: parse statusText for Ring/Talk indicators (common in Asterisk/FusionPBX)
+            var statusText = info.presStatus.statusText;
+            if (newState == BuddyState.Online && !string.IsNullOrEmpty(statusText))
+            {
+                if (statusText.StartsWith("Ring", StringComparison.OrdinalIgnoreCase) ||
+                    statusText.StartsWith("Talk", StringComparison.OrdinalIgnoreCase))
+                {
+                    newState = BuddyState.OnThePhone;
+                }
+            }
+
+            _logger.LogDebug("Buddy {Uri} mapped state: {OldState} -> {NewState}", Uri, State, newState);
             SetState(newState, info.presStatus.statusText);
         }
         catch (Exception ex)
@@ -193,6 +216,7 @@ internal sealed class ManagedBuddy : ISipBuddy
         {
             try
             {
+                _logger.LogDebug("onBuddyState callback for {Uri}", _managed.Uri);
                 _managed.OnNativeBuddyState();
             }
             catch (Exception ex)
@@ -205,6 +229,7 @@ internal sealed class ManagedBuddy : ISipBuddy
         {
             try
             {
+                _logger.LogDebug("onBuddyEvSubState callback for {Uri}", _managed.Uri);
                 _managed.OnNativeBuddyState();
             }
             catch (Exception ex)
