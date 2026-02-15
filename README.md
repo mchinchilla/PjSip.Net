@@ -11,13 +11,37 @@ SDK de alto nivel para integrar telefonía SIP en aplicaciones .NET 10. Basado e
   - [SipPhoneOptions](#sipphoneoptions)
   - [SipAccountOptions](#sipaccountoptions)
   - [Transporte y TLS](#transporte-y-tls)
+  - [NAT/STUN/ICE/TURN](#natstun-iceturn)
 - [Inyección de Dependencias](#inyección-de-dependencias)
 - [API Reference](#api-reference)
   - [ISipPhone](#isipphone)
   - [ISipAccount](#isipaccount)
   - [ISipCall](#isipcall)
   - [ISipAudioManager](#isipaudiomanager)
+  - [ISipCodecManager](#isipcodecmanager)
+  - [ISipPresenceManager](#isippresencemanager)
+  - [ISipMessaging](#isipmessaging)
+  - [ISipConferenceBridge](#isipconferencebridge)
+  - [ISipCallRecorder](#isipcallrecorder)
+  - [ISipToneGenerator](#isiptonegenerator)
+  - [ISipCallQualityMonitor](#isipcallqualitymonitor)
+  - [ISipCallHistory](#isipcallhistory)
+  - [ISipNetworkMonitor](#isipnetworkmonitor)
 - [Eventos](#eventos)
+- [Features Avanzados](#features-avanzados)
+  - [Presencia y BLF](#presencia-y-blf)
+  - [Mensajería SIP (MESSAGE)](#mensajería-sip-message)
+  - [Conferencia](#conferencia)
+  - [Grabación de Llamadas](#grabación-de-llamadas)
+  - [Generador de Tonos](#generador-de-tonos)
+  - [Calidad de Llamada](#calidad-de-llamada)
+  - [Historial de Llamadas](#historial-de-llamadas)
+  - [Do Not Disturb (DND)](#do-not-disturb-dnd)
+  - [Desvío de Llamadas](#desvío-de-llamadas)
+  - [Message Waiting Indicator (MWI)](#message-waiting-indicator-mwi)
+  - [Custom Headers](#custom-headers)
+  - [Transferencia Atendida](#transferencia-atendida)
+  - [Monitor de Red](#monitor-de-red)
 - [Ejemplos por Plataforma](#ejemplos-por-plataforma)
   - [Console App](#console-app)
   - [WPF](#wpf)
@@ -122,8 +146,10 @@ services.AddPjSip(options =>
     options.LogLevel = 4;                    // Nivel de log PJSIP: 0=fatal, 5=trace (default: 4)
     options.MaxCalls = 8;                    // Máximo de llamadas simultáneas (default: 4)
     options.UseCompactForm = false;          // Headers SIP compactos (default: false)
+    options.CallHistoryMaxEntries = 1000;    // Máximo de entradas en historial (default: 1000)
     options.Transports = [ ... ];            // Lista de transportes a crear
     options.Accounts = [ ... ];             // Cuentas a registrar al iniciar
+    options.Nat = new NatOptions { ... };   // Configuración NAT/STUN/ICE/TURN
 });
 ```
 
@@ -133,8 +159,10 @@ services.AddPjSip(options =>
 | `LogLevel` | `int` | `4` | Verbosidad del log interno de PJSIP (0-5) |
 | `MaxCalls` | `int` | `4` | Número máximo de llamadas simultáneas |
 | `UseCompactForm` | `bool` | `false` | Usar headers SIP en forma compacta |
+| `CallHistoryMaxEntries` | `int` | `1000` | Máximo de entradas almacenadas en el historial de llamadas |
 | `Transports` | `List<SipTransportOptions>` | `[]` | Transportes SIP a crear al iniciar |
 | `Accounts` | `List<SipAccountOptions>` | `[]` | Cuentas SIP a registrar automáticamente |
+| `Nat` | `NatOptions` | `new()` | Configuración de NAT traversal (STUN/ICE/TURN) |
 
 ### SipAccountOptions
 
@@ -230,6 +258,37 @@ options.Transports.Add(new SipTransportOptions
 > **macOS/iOS:** Usa Secure Transport del sistema.
 > **Android:** Requiere OpenSSL precompilado (incluido en el paquete nativo).
 
+### NAT/STUN, ICE/TURN
+
+Configuración de NAT traversal para redes detrás de firewalls o routers NAT.
+
+```csharp
+options.Nat = new NatOptions
+{
+    EnableStun = true,
+    StunServers = ["stun.l.google.com:19302", "stun1.l.google.com:19302"],
+    EnableIce = true,                        // ICE para media NAT traversal (default: true)
+    EnableTurn = false,                      // TURN relay (para NAT simétricos)
+    TurnServer = "turn.miempresa.com:3478",
+    TurnUsername = "user",
+    TurnPassword = "pass",
+    TurnTransport = NatTraversalType.Udp,   // Transporte TURN: Udp, Tcp, Tls
+    IceAggressiveNomination = false          // Nominación agresiva ICE
+};
+```
+
+| Propiedad | Tipo | Default | Descripción |
+|---|---|---|---|
+| `EnableStun` | `bool` | `false` | Activar resolución STUN para descubrir IP pública |
+| `StunServers` | `List<string>` | `[]` | Lista de servidores STUN (`host:port`) |
+| `EnableIce` | `bool` | `true` | Activar ICE para NAT traversal del media |
+| `EnableTurn` | `bool` | `false` | Activar TURN relay para NAT simétricos |
+| `TurnServer` | `string?` | `null` | Dirección del servidor TURN (`host:port`) |
+| `TurnUsername` | `string?` | `null` | Usuario para autenticación TURN |
+| `TurnPassword` | `string?` | `null` | Contraseña para autenticación TURN |
+| `TurnTransport` | `NatTraversalType` | `Udp` | Transporte TURN: `Udp`, `Tcp`, `Tls` |
+| `IceAggressiveNomination` | `bool` | `false` | Nominación agresiva ICE (más rápido, menos confiable) |
+
 ---
 
 ## Inyección de Dependencias
@@ -269,6 +328,15 @@ services.AddPjSip(options => { ... }, PjSipServiceLifetime.Scoped);
 |---|---|
 | `ISipPhone` | Facade principal — gestión de cuentas, llamadas y transporte |
 | `ISipAudioManager` | Gestión de dispositivos de audio (micrófono, altavoz, volumen) |
+| `ISipCodecManager` | Gestión de codecs de audio (prioridades, habilitar/deshabilitar) |
+| `ISipPresenceManager` | Presencia y BLF (Busy Lamp Field) |
+| `ISipMessaging` | Mensajería SIP (SIP MESSAGE) |
+| `ISipConferenceBridge` | Conferencia de audio (puente) |
+| `ISipCallRecorder` | Grabación de llamadas |
+| `ISipToneGenerator` | Generador de tonos (ringback, busy, dial, DTMF) |
+| `ISipCallQualityMonitor` | Monitoreo de calidad de llamada (RTP stats, MOS) |
+| `ISipCallHistory` | Historial de llamadas |
+| `ISipNetworkMonitor` | Monitoreo de cambios de red |
 
 ### Inyectar en tus clases
 
@@ -300,13 +368,39 @@ public class MiServicioTelefonia
 }
 ```
 
+También puedes inyectar sub-managers directamente:
+
+```csharp
+public class MiServicioPresencia
+{
+    private readonly ISipPresenceManager _presence;
+    private readonly ISipCallHistory _history;
+
+    public MiServicioPresencia(ISipPresenceManager presence, ISipCallHistory history)
+    {
+        _presence = presence;
+        _history = history;
+    }
+
+    public async Task MostrarDisponibleAsync()
+    {
+        await _presence.SetMyPresenceAsync(BuddyState.Online, "Disponible");
+    }
+
+    public int LlamadasPerdidasHoy()
+    {
+        return _history.GetMissedCalls().Count;
+    }
+}
+```
+
 ---
 
 ## API Reference
 
 ### ISipPhone
 
-Facade principal del SDK. Gestiona el ciclo de vida del endpoint SIP, cuentas y llamadas.
+Facade principal del SDK. Gestiona el ciclo de vida del endpoint SIP, cuentas, llamadas y todos los sub-managers.
 
 ```csharp
 public interface ISipPhone : IAsyncDisposable, IDisposable
@@ -319,6 +413,15 @@ public interface ISipPhone : IAsyncDisposable, IDisposable
 | `State` | `SipPhoneState` | Estado actual del teléfono |
 | `Accounts` | `IReadOnlyList<ISipAccount>` | Cuentas SIP registradas |
 | `Audio` | `ISipAudioManager` | Gestor de dispositivos de audio |
+| `Codecs` | `ISipCodecManager` | Gestor de codecs de audio |
+| `Presence` | `ISipPresenceManager` | Gestor de presencia y BLF |
+| `Messaging` | `ISipMessaging` | Mensajería SIP (MESSAGE) |
+| `Conference` | `ISipConferenceBridge` | Puente de conferencia |
+| `Recorder` | `ISipCallRecorder` | Grabador de llamadas |
+| `Tones` | `ISipToneGenerator` | Generador de tonos |
+| `Quality` | `ISipCallQualityMonitor` | Monitor de calidad de llamada |
+| `History` | `ISipCallHistory` | Historial de llamadas |
+| `Network` | `ISipNetworkMonitor` | Monitor de cambios de red |
 
 **Métodos:**
 
@@ -329,6 +432,17 @@ public interface ISipPhone : IAsyncDisposable, IDisposable
 | `AddAccount(options)` | `ISipAccount` | Agrega una nueva cuenta SIP en runtime |
 | `RemoveAccount(account)` | `void` | Elimina y des-registra una cuenta |
 | `MakeCall(account, uri)` | `ISipCall` | Inicia una llamada saliente desde una cuenta |
+| `MakeCall(account, uri, headers)` | `ISipCall` | Inicia una llamada saliente con headers SIP custom |
+
+**Eventos:**
+
+| Evento | EventArgs | Descripción |
+|---|---|---|
+| `IncomingCall` | `IncomingCallEventArgs` | Llamada entrante en cualquier cuenta |
+| `CallStateChanged` | `CallStateChangedEventArgs` | Cambio de estado en cualquier llamada |
+| `RegistrationStateChanged` | `RegistrationStateChangedEventArgs` | Cambio de registro en cualquier cuenta |
+| `TransportStateChanged` | `TransportStateChangedEventArgs` | Cambio de estado del transporte |
+| `MwiStateChanged` | `MwiStateChangedEventArgs` | Nuevo indicador de mensaje en espera (voicemail) |
 
 **Estados (`SipPhoneState`):**
 
@@ -360,6 +474,9 @@ public interface ISipAccount : IDisposable
 | `RegistrationState` | `SipRegistrationState` | Estado de registro actual |
 | `Options` | `SipAccountOptions` | Configuración de la cuenta |
 | `ActiveCalls` | `IReadOnlyList<ISipCall>` | Llamadas activas en esta cuenta |
+| `DndMode` | `DndMode` | Modo Do Not Disturb (lectura/escritura) |
+| `CallForwarding` | `CallForwardingOptions` | Configuración de desvío de llamadas |
+| `MwiInfo` | `MwiInfo?` | Información de mensajes en espera (voicemail), `null` si no hay datos |
 
 **Métodos:**
 
@@ -368,6 +485,15 @@ public interface ISipAccount : IDisposable
 | `RegisterAsync(ct)` | `Task` | Envía REGISTER al servidor |
 | `UnregisterAsync(ct)` | `Task` | Envía un-REGISTER al servidor |
 | `MakeCall(destinationUri)` | `ISipCall` | Inicia una llamada desde esta cuenta |
+| `MakeCall(destinationUri, headers)` | `ISipCall` | Inicia una llamada con headers SIP custom |
+
+**Eventos:**
+
+| Evento | EventArgs | Descripción |
+|---|---|---|
+| `RegistrationStateChanged` | `RegistrationStateChangedEventArgs` | Cambio de estado de registro |
+| `IncomingCall` | `IncomingCallEventArgs` | Llamada entrante para esta cuenta |
+| `MwiStateChanged` | `MwiStateChangedEventArgs` | Nuevo estado de voicemail |
 
 **Estados de registro (`SipRegistrationState`):**
 
@@ -397,16 +523,21 @@ public interface ISipCall : IDisposable
 | `State` | `SipCallState` | Estado actual de la llamada |
 | `Direction` | `CallDirection` | `Incoming` o `Outgoing` |
 | `Info` | `SipCallInfo` | Información detallada (URIs, duración, status code) |
+| `CustomHeaders` | `IReadOnlyList<SipHeader>` | Headers SIP personalizados de la llamada |
+| `IsMuted` | `bool` | Si el micrófono está silenciado en esta llamada |
+| `IsOnHold` | `bool` | Si la llamada está en espera |
 
 **Métodos:**
 
 | Método | Descripción |
 |---|---|
 | `Answer(statusCode)` | Contestar la llamada. Default: `200` (OK) |
+| `Answer(statusCode, headers)` | Contestar con headers SIP custom |
 | `Hangup(statusCode)` | Colgar la llamada. Default: `603` (Decline) |
 | `Hold()` | Poner en espera (hold) |
 | `Unhold()` | Quitar de espera (re-INVITE) |
 | `Transfer(destinationUri)` | Transferir la llamada a otro destino (REFER) |
+| `AttendedTransfer(targetCall)` | Transferencia atendida — conecta esta llamada con otra activa |
 | `SendDtmf(digits)` | Enviar tonos DTMF (ej: `"1234#"`) |
 | `SetMute(mute)` | Silenciar/des-silenciar el micrófono |
 
@@ -445,6 +576,16 @@ public interface ISipCall : IDisposable
 | `StatusCode` | `int` | Último código SIP recibido |
 | `StatusText` | `string?` | Texto del último status SIP |
 
+**SipHeader (header personalizado):**
+
+```csharp
+public sealed record SipHeader
+{
+    public required string Name { get; init; }
+    public required string Value { get; init; }
+}
+```
+
 ---
 
 ### ISipAudioManager
@@ -477,11 +618,355 @@ public interface ISipAudioManager
 
 | Propiedad | Tipo | Descripción |
 |---|---|---|
-| `DeviceId` | `int` | ID del dispositivo (para usar con `SetInputDevice`/`SetOutputDevice`) |
+| `DeviceId` | `int` | ID del dispositivo |
 | `Name` | `string` | Nombre del dispositivo (ej: "Realtek HD Audio") |
 | `InputChannels` | `int` | Número de canales de entrada |
 | `OutputChannels` | `int` | Número de canales de salida |
 | `Driver` | `string?` | Nombre del driver de audio |
+
+---
+
+### ISipCodecManager
+
+Gestión de codecs de audio: listar, priorizar, habilitar y deshabilitar.
+
+```csharp
+public interface ISipCodecManager
+```
+
+**Métodos:**
+
+| Método | Retorno | Descripción |
+|---|---|---|
+| `GetCodecs()` | `IReadOnlyList<CodecInfo>` | Lista de codecs disponibles con sus prioridades |
+| `SetCodecPriority(codecId, priority)` | `void` | Establecer prioridad de un codec (0-255, 0 = deshabilitado) |
+| `EnableCodec(codecId, priority)` | `void` | Habilitar un codec con prioridad opcional (default: 128) |
+| `DisableCodec(codecId)` | `void` | Deshabilitar un codec (prioridad = 0) |
+
+**CodecInfo:**
+
+| Propiedad | Tipo | Descripción |
+|---|---|---|
+| `CodecId` | `string` | Identificador del codec (ej: `"PCMU/8000"`, `"opus/48000"`) |
+| `Description` | `string` | Descripción legible del codec |
+| `Priority` | `int` | Prioridad actual (0-255, 0 = deshabilitado) |
+| `ClockRate` | `int` | Frecuencia de muestreo en Hz |
+| `ChannelCount` | `int` | Número de canales de audio |
+
+---
+
+### ISipPresenceManager
+
+Gestión de presencia (SUBSCRIBE/NOTIFY) y BLF (Busy Lamp Field).
+
+```csharp
+public interface ISipPresenceManager
+```
+
+**Propiedades:**
+
+| Propiedad | Tipo | Descripción |
+|---|---|---|
+| `Buddies` | `IReadOnlyList<ISipBuddy>` | Lista de buddies monitoreados |
+| `MyState` | `BuddyState` | Mi estado de presencia actual |
+
+**Métodos:**
+
+| Método | Retorno | Descripción |
+|---|---|---|
+| `AddBuddy(uri)` | `ISipBuddy` | Agregar un buddy para monitorear su presencia |
+| `RemoveBuddy(buddy)` | `void` | Dejar de monitorear un buddy |
+| `SetMyPresenceAsync(state, statusText, ct)` | `Task` | Publicar mi estado de presencia |
+
+**Eventos:**
+
+| Evento | EventArgs | Descripción |
+|---|---|---|
+| `BuddyStateChanged` | `BuddyStateChangedEventArgs` | Cambio de estado de un buddy |
+
+**ISipBuddy:**
+
+| Propiedad/Método | Tipo | Descripción |
+|---|---|---|
+| `Uri` | `string` | URI SIP del buddy |
+| `State` | `BuddyState` | Estado actual |
+| `Info` | `BuddyInfo` | Información completa (nombre, estado, texto, timestamp) |
+| `StateChanged` | `event` | Notificación de cambio de estado |
+| `SubscribeAsync(ct)` | `Task` | Suscribirse a las notificaciones de presencia |
+| `UnsubscribeAsync(ct)` | `Task` | Cancelar la suscripción |
+
+**BuddyState:**
+
+| Estado | Descripción |
+|---|---|
+| `Unknown` | Estado desconocido |
+| `Online` | Disponible |
+| `Away` | Ausente |
+| `Busy` | Ocupado |
+| `OnThePhone` | En una llamada |
+| `Offline` | Fuera de línea |
+
+---
+
+### ISipMessaging
+
+Envío y recepción de mensajes SIP (método MESSAGE, RFC 3428).
+
+```csharp
+public interface ISipMessaging
+```
+
+**Métodos:**
+
+| Método | Retorno | Descripción |
+|---|---|---|
+| `SendMessageAsync(account, destUri, body, contentType, ct)` | `Task` | Enviar un mensaje SIP. `contentType` default: `"text/plain"` |
+
+**Eventos:**
+
+| Evento | EventArgs | Descripción |
+|---|---|---|
+| `MessageReceived` | `SipMessageReceivedEventArgs` | Mensaje recibido (contiene `SipMessage`) |
+| `MessageStatus` | `SipMessageStatusEventArgs` | Status de entrega de un mensaje enviado |
+
+**SipMessage:**
+
+| Propiedad | Tipo | Descripción |
+|---|---|---|
+| `From` | `string` | URI del remitente |
+| `To` | `string` | URI del destinatario |
+| `Body` | `string` | Cuerpo del mensaje |
+| `ContentType` | `string` | Tipo de contenido (default: `"text/plain"`) |
+| `Timestamp` | `DateTime` | Hora del mensaje (UTC) |
+
+---
+
+### ISipConferenceBridge
+
+Puente de conferencia para mezclar audio de múltiples llamadas.
+
+```csharp
+public interface ISipConferenceBridge
+```
+
+**Propiedades:**
+
+| Propiedad | Tipo | Descripción |
+|---|---|---|
+| `Participants` | `IReadOnlyList<ISipCall>` | Llamadas actualmente en la conferencia |
+
+**Métodos:**
+
+| Método | Retorno | Descripción |
+|---|---|---|
+| `AddParticipant(call)` | `void` | Agregar una llamada a la conferencia |
+| `RemoveParticipant(call)` | `void` | Remover una llamada de la conferencia |
+| `MergeAll(calls)` | `void` | Unir varias llamadas en una sola conferencia |
+| `SplitAll()` | `void` | Separar todas las llamadas de la conferencia |
+
+---
+
+### ISipCallRecorder
+
+Grabación de llamadas a archivo.
+
+```csharp
+public interface ISipCallRecorder : IDisposable
+```
+
+**Propiedades:**
+
+| Propiedad | Tipo | Descripción |
+|---|---|---|
+| `IsRecording` | `bool` | Si hay una grabación en curso |
+| `CurrentFilePath` | `string?` | Ruta del archivo actual, `null` si no está grabando |
+
+**Métodos:**
+
+| Método | Retorno | Descripción |
+|---|---|---|
+| `StartRecording(call, filePath, format)` | `void` | Iniciar grabación. `format` default: `Wav` |
+| `StopRecording()` | `void` | Detener la grabación actual |
+
+**Eventos:**
+
+| Evento | EventArgs | Descripción |
+|---|---|---|
+| `RecordingStateChanged` | `RecordingStateChangedEventArgs` | Cambio de estado de la grabación |
+
+**RecordingFormat:**
+
+| Valor | Descripción |
+|---|---|
+| `Wav` | Formato WAV sin comprimir |
+| `Mp3` | Formato MP3 comprimido |
+
+---
+
+### ISipToneGenerator
+
+Generador de tonos de señalización.
+
+```csharp
+public interface ISipToneGenerator : IDisposable
+```
+
+**Propiedades:**
+
+| Propiedad | Tipo | Descripción |
+|---|---|---|
+| `IsPlaying` | `bool` | Si hay un tono reproduciéndose |
+
+**Métodos:**
+
+| Método | Retorno | Descripción |
+|---|---|---|
+| `PlayTone(tone)` | `void` | Reproducir un tipo de tono predefinido |
+| `PlayTones(tones)` | `void` | Reproducir una secuencia de tonos custom |
+| `PlayRingbackTone()` | `void` | Tono de ringback (North American: 440+480 Hz) |
+| `PlayBusyTone()` | `void` | Tono de ocupado (480+620 Hz) |
+| `PlayDialTone()` | `void` | Tono de marcado (350+440 Hz) |
+| `Stop()` | `void` | Detener el tono actual |
+
+**ToneDescriptor (para tonos custom):**
+
+| Propiedad | Tipo | Descripción |
+|---|---|---|
+| `Frequency1` | `int` | Primera frecuencia en Hz |
+| `Frequency2` | `int` | Segunda frecuencia en Hz (0 = tono simple) |
+| `OnMs` | `int` | Duración del tono en milisegundos |
+| `OffMs` | `int` | Duración del silencio en milisegundos |
+| `Volume` | `int` | Volumen (default: 16000) |
+
+**ToneType:**
+
+| Valor | Descripción |
+|---|---|
+| `Ringback` | Tono de ringback estándar |
+| `Busy` | Tono de ocupado |
+| `Dial` | Tono de marcado |
+| `Custom` | Tono personalizado |
+
+---
+
+### ISipCallQualityMonitor
+
+Monitoreo de calidad de llamada: estadísticas RTP, jitter, pérdida de paquetes y MOS score.
+
+```csharp
+public interface ISipCallQualityMonitor
+```
+
+**Métodos:**
+
+| Método | Retorno | Descripción |
+|---|---|---|
+| `GetQuality(call)` | `CallQualityInfo?` | Obtener calidad actual de una llamada (síncrono) |
+| `GetQualityAsync(call, ct)` | `Task<CallQualityInfo?>` | Obtener calidad actual (asíncrono, thread-safe) |
+
+**Eventos:**
+
+| Evento | EventArgs | Descripción |
+|---|---|---|
+| `QualityReportAvailable` | `CallQualityEventArgs` | Reporte de calidad disponible |
+
+**CallQualityInfo:**
+
+| Propiedad | Tipo | Descripción |
+|---|---|---|
+| `CallId` | `string` | ID de la llamada |
+| `Duration` | `TimeSpan` | Duración de la llamada al momento de la medición |
+| `RtpPacketsSent` | `long` | Total de paquetes RTP enviados |
+| `RtpPacketsReceived` | `long` | Total de paquetes RTP recibidos |
+| `RtpPacketsLost` | `long` | Paquetes RTP perdidos |
+| `RtpLossPercentage` | `double` | Porcentaje de pérdida de paquetes |
+| `RtpJitterMs` | `int` | Jitter en milisegundos |
+| `RtpRoundTripTimeMs` | `int` | Round-trip time en milisegundos |
+| `CodecName` | `string?` | Codec activo en la llamada |
+| `CodecClockRate` | `int` | Clock rate del codec activo |
+| `MosScore` | `double` | Mean Opinion Score estimado (1.0 — 5.0) |
+
+---
+
+### ISipCallHistory
+
+Historial de llamadas con filtrado por tipo.
+
+```csharp
+public interface ISipCallHistory
+```
+
+**Propiedades:**
+
+| Propiedad | Tipo | Descripción |
+|---|---|---|
+| `Entries` | `IReadOnlyList<CallHistoryEntry>` | Todas las entradas del historial |
+
+**Métodos:**
+
+| Método | Retorno | Descripción |
+|---|---|---|
+| `GetMissedCalls()` | `IReadOnlyList<CallHistoryEntry>` | Llamadas entrantes no contestadas |
+| `GetIncomingCalls()` | `IReadOnlyList<CallHistoryEntry>` | Todas las llamadas entrantes |
+| `GetOutgoingCalls()` | `IReadOnlyList<CallHistoryEntry>` | Todas las llamadas salientes |
+| `Clear()` | `void` | Limpiar el historial |
+
+**Eventos:**
+
+| Evento | EventArgs | Descripción |
+|---|---|---|
+| `EntryAdded` | `CallHistoryEntry` | Nueva entrada agregada al historial |
+
+**CallHistoryEntry:**
+
+| Propiedad | Tipo | Descripción |
+|---|---|---|
+| `CallId` | `string` | ID de la llamada |
+| `RemoteUri` | `string` | URI del otro extremo |
+| `RemoteDisplayName` | `string?` | Nombre del otro extremo |
+| `Direction` | `CallDirection` | `Incoming` o `Outgoing` |
+| `StartTime` | `DateTime` | Hora de inicio |
+| `EndTime` | `DateTime?` | Hora de finalización |
+| `Duration` | `TimeSpan` | Duración de la llamada |
+| `FinalState` | `SipCallState` | Estado final de la llamada |
+| `StatusCode` | `int` | Código SIP final |
+| `AccountUri` | `string?` | URI de la cuenta local |
+
+---
+
+### ISipNetworkMonitor
+
+Monitoreo de cambios de red para re-registrar cuentas automáticamente.
+
+```csharp
+public interface ISipNetworkMonitor : IDisposable
+```
+
+**Propiedades:**
+
+| Propiedad | Tipo | Descripción |
+|---|---|---|
+| `CurrentState` | `NetworkState` | Estado actual de la red |
+
+**Métodos:**
+
+| Método | Retorno | Descripción |
+|---|---|---|
+| `HandleNetworkChangeAsync(ct)` | `Task` | Notificar un cambio de red manualmente (re-registra cuentas, reinicia transportes) |
+
+**Eventos:**
+
+| Evento | EventArgs | Descripción |
+|---|---|---|
+| `NetworkStateChanged` | `NetworkStateChangedEventArgs` | Cambio de estado de la red |
+
+**NetworkState:**
+
+| Estado | Descripción |
+|---|---|
+| `Connected` | Red conectada |
+| `Disconnected` | Sin conectividad de red |
+| `Changed` | La red cambió (nueva IP, cambio WiFi/datos) |
 
 ---
 
@@ -525,6 +1010,12 @@ phone.TransportStateChanged += (sender, e) =>
 {
     Console.WriteLine($"Transporte {e.TransportType}: {e.State}");
 };
+
+// Message Waiting Indicator (voicemail)
+phone.MwiStateChanged += (sender, e) =>
+{
+    Console.WriteLine($"Cuenta {e.Account.Uri}: {e.MwiInfo.NewMessages} mensaje(s) nuevo(s)");
+};
 ```
 
 ### En ISipAccount (nivel cuenta)
@@ -537,6 +1028,9 @@ account.RegistrationStateChanged += (sender, e) =>
 
 account.IncomingCall += (sender, e) =>
     Console.WriteLine($"Llamada entrante para esta cuenta: {e.RemoteUri}");
+
+account.MwiStateChanged += (sender, e) =>
+    Console.WriteLine($"Voicemail: {e.MwiInfo.NewMessages} nuevos, {e.MwiInfo.OldMessages} viejos");
 ```
 
 ### En ISipCall (nivel llamada)
@@ -556,6 +1050,380 @@ call.MediaStateChanged += (sender, e) =>
 {
     Console.WriteLine($"Media activa: {e.IsActive}");
 };
+```
+
+---
+
+## Features Avanzados
+
+### Presencia y BLF
+
+Monitoreo del estado de presencia de otros usuarios (Busy Lamp Field).
+
+```csharp
+var presence = phone.Presence;
+
+// Publicar mi estado
+await presence.SetMyPresenceAsync(BuddyState.Online, "Disponible");
+
+// Agregar un buddy para monitorear
+var buddy = presence.AddBuddy("sip:1002@pbx.com");
+await buddy.SubscribeAsync();
+
+// Escuchar cambios de estado
+buddy.StateChanged += (s, e) =>
+    Console.WriteLine($"{buddy.Uri}: {e.OldState} -> {e.NewState}");
+
+// También a nivel global
+presence.BuddyStateChanged += (s, e) =>
+    Console.WriteLine($"Buddy {e.Buddy.Uri}: {e.NewState}");
+
+// Consultar estado actual
+Console.WriteLine($"Estado actual: {buddy.State}");
+Console.WriteLine($"Última actualización: {buddy.Info.LastUpdated}");
+
+// Dejar de monitorear
+await buddy.UnsubscribeAsync();
+presence.RemoveBuddy(buddy);
+```
+
+### Mensajería SIP (MESSAGE)
+
+Envío y recepción de mensajes de texto via SIP MESSAGE (RFC 3428).
+
+```csharp
+var messaging = phone.Messaging;
+
+// Enviar un mensaje
+await messaging.SendMessageAsync(
+    phone.Accounts[0],
+    "sip:1002@pbx.com",
+    "Hola, estás disponible para una llamada?"
+);
+
+// Recibir mensajes
+messaging.MessageReceived += (s, e) =>
+    Console.WriteLine($"Mensaje de {e.Message.From}: {e.Message.Body}");
+
+// Status de entrega
+messaging.MessageStatus += (s, e) =>
+    Console.WriteLine($"Mensaje a {e.DestinationUri}: código {e.StatusCode}");
+```
+
+### Conferencia
+
+Mezclar audio de múltiples llamadas en una conferencia.
+
+```csharp
+var conference = phone.Conference;
+var account = phone.Accounts[0];
+
+// Crear llamadas
+var call1 = phone.MakeCall(account, "sip:1002@pbx.com");
+var call2 = phone.MakeCall(account, "sip:1003@pbx.com");
+
+// Esperar a que estén conectadas, luego unir
+conference.AddParticipant(call1);
+conference.AddParticipant(call2);
+
+// Ver participantes
+Console.WriteLine($"Participantes: {conference.Participants.Count}");
+
+// Unir todas de una vez
+conference.MergeAll(new[] { call1, call2 });
+
+// Separar todas
+conference.SplitAll();
+
+// Remover uno
+conference.RemoveParticipant(call2);
+```
+
+### Grabación de Llamadas
+
+Grabar el audio de una llamada a archivo.
+
+```csharp
+var recorder = phone.Recorder;
+
+// Iniciar grabación
+recorder.StartRecording(call, @"C:\recordings\call-001.wav");
+// o en MP3:
+recorder.StartRecording(call, @"C:\recordings\call-001.mp3", RecordingFormat.Mp3);
+
+// Verificar estado
+Console.WriteLine($"Grabando: {recorder.IsRecording}");
+Console.WriteLine($"Archivo: {recorder.CurrentFilePath}");
+
+// Escuchar cambios de estado
+recorder.RecordingStateChanged += (s, e) =>
+    Console.WriteLine($"Grabación: {(e.IsRecording ? "iniciada" : "detenida")}");
+
+// Detener grabación
+recorder.StopRecording();
+```
+
+### Generador de Tonos
+
+Reproducir tonos de señalización estándar o personalizados.
+
+```csharp
+var tones = phone.Tones;
+
+// Tonos estándar (frecuencias North American)
+tones.PlayDialTone();      // 350+440 Hz continuo
+tones.PlayRingbackTone();  // 440+480 Hz, 2s on / 4s off
+tones.PlayBusyTone();      // 480+620 Hz, 0.5s on / 0.5s off
+
+// Tono genérico por tipo
+tones.PlayTone(ToneType.Busy);
+
+// Tonos personalizados
+tones.PlayTones(new[]
+{
+    new ToneDescriptor { Frequency1 = 941, Frequency2 = 1336, OnMs = 100, OffMs = 100 },  // Tecla '#'
+    new ToneDescriptor { Frequency1 = 697, Frequency2 = 1209, OnMs = 100, OffMs = 100 },  // Tecla '1'
+});
+
+// Detener
+tones.Stop();
+Console.WriteLine($"Reproduciendo: {tones.IsPlaying}");
+```
+
+### Calidad de Llamada
+
+Monitorear estadísticas RTP y MOS score durante una llamada activa.
+
+```csharp
+var quality = phone.Quality;
+
+// Consultar calidad de una llamada activa
+var info = quality.GetQuality(call);
+if (info != null)
+{
+    Console.WriteLine($"Codec: {info.CodecName}");
+    Console.WriteLine($"Paquetes enviados: {info.RtpPacketsSent}");
+    Console.WriteLine($"Pérdida: {info.RtpLossPercentage:F1}%");
+    Console.WriteLine($"Jitter: {info.RtpJitterMs}ms");
+    Console.WriteLine($"RTT: {info.RtpRoundTripTimeMs}ms");
+    Console.WriteLine($"MOS: {info.MosScore:F1}/5.0");
+}
+
+// O de forma asíncrona (thread-safe)
+var asyncInfo = await quality.GetQualityAsync(call);
+
+// Escuchar reportes periódicos
+quality.QualityReportAvailable += (s, e) =>
+    Console.WriteLine($"Llamada {e.Call.Id}: MOS={e.Quality.MosScore:F1}");
+```
+
+### Historial de Llamadas
+
+Historial automático de llamadas con filtrado.
+
+```csharp
+var history = phone.History;
+
+// El historial se llena automáticamente al desconectarse una llamada
+
+// Consultar todas las entradas
+foreach (var entry in history.Entries)
+{
+    Console.WriteLine($"[{entry.Direction}] {entry.RemoteUri} - " +
+                      $"{entry.Duration:mm\\:ss} - {entry.FinalState}");
+}
+
+// Filtrar por tipo
+var missed = history.GetMissedCalls();
+var incoming = history.GetIncomingCalls();
+var outgoing = history.GetOutgoingCalls();
+
+Console.WriteLine($"Perdidas: {missed.Count}");
+Console.WriteLine($"Entrantes: {incoming.Count}");
+Console.WriteLine($"Salientes: {outgoing.Count}");
+
+// Escuchar nuevas entradas
+history.EntryAdded += (s, entry) =>
+    Console.WriteLine($"Nueva entrada: {entry.RemoteUri} ({entry.Direction})");
+
+// Limpiar historial
+history.Clear();
+```
+
+> El tamaño máximo del historial se configura con `SipPhoneOptions.CallHistoryMaxEntries` (default: 1000).
+
+### Do Not Disturb (DND)
+
+Controlar el comportamiento de llamadas entrantes por cuenta.
+
+```csharp
+var account = phone.Accounts[0];
+
+// Activar DND — rechazar todas las llamadas
+account.DndMode = DndMode.RejectAll;
+
+// Rechazar con señal de ocupado (486 Busy Here)
+account.DndMode = DndMode.RejectWithBusy;
+
+// Ring silencioso (la llamada llega pero sin tono)
+account.DndMode = DndMode.SilentRing;
+
+// Desactivar DND
+account.DndMode = DndMode.Off;
+```
+
+**Modos DND (`DndMode`):**
+
+| Modo | Descripción |
+|---|---|
+| `Off` | Desactivado — comportamiento normal |
+| `RejectAll` | Rechaza todas las llamadas entrantes (603 Decline) |
+| `RejectWithBusy` | Rechaza con señal de ocupado (486 Busy Here) |
+| `SilentRing` | La llamada llega pero no suena (ring silencioso) |
+
+### Desvío de Llamadas
+
+Configurar call forwarding para una cuenta.
+
+```csharp
+var account = phone.Accounts[0];
+
+// Desvío incondicional
+account.CallForwarding.Enabled = true;
+account.CallForwarding.Type = CallForwardingType.Unconditional;
+account.CallForwarding.DestinationUri = "sip:1003@pbx.com";
+
+// Desvío si no contesta (después de 20 segundos)
+account.CallForwarding.Type = CallForwardingType.OnNoAnswer;
+account.CallForwarding.NoAnswerTimeout = TimeSpan.FromSeconds(20);
+
+// Desvío si ocupado
+account.CallForwarding.Type = CallForwardingType.OnBusy;
+
+// Desactivar
+account.CallForwarding.Enabled = false;
+```
+
+**Tipos de desvío (`CallForwardingType`):**
+
+| Tipo | Descripción |
+|---|---|
+| `Unconditional` | Desvía todas las llamadas inmediatamente |
+| `OnBusy` | Desvía si la cuenta está ocupada |
+| `OnNoAnswer` | Desvía si no se contesta en el timeout configurado |
+| `OnNotReachable` | Desvía si la cuenta no está disponible |
+
+### Message Waiting Indicator (MWI)
+
+Recibir notificaciones de buzón de voz (voicemail).
+
+```csharp
+var account = phone.Accounts[0];
+
+// Escuchar cambios de MWI a nivel de cuenta
+account.MwiStateChanged += (s, e) =>
+{
+    Console.WriteLine($"Buzón de voz actualizado:");
+    Console.WriteLine($"  Hay mensajes: {e.MwiInfo.HasWaiting}");
+    Console.WriteLine($"  Nuevos: {e.MwiInfo.NewMessages}");
+    Console.WriteLine($"  Viejos: {e.MwiInfo.OldMessages}");
+    Console.WriteLine($"  Urgentes nuevos: {e.MwiInfo.NewUrgentMessages}");
+    Console.WriteLine($"  Urgentes viejos: {e.MwiInfo.OldUrgentMessages}");
+};
+
+// O a nivel global
+phone.MwiStateChanged += (s, e) =>
+    Console.WriteLine($"Cuenta {e.Account.Uri}: {e.MwiInfo.NewMessages} nuevos");
+
+// Consultar estado actual (null si aún no se ha recibido notificación)
+var mwi = account.MwiInfo;
+if (mwi != null && mwi.HasWaiting)
+    Console.WriteLine($"Tienes {mwi.NewMessages} mensaje(s) de voz");
+```
+
+**MwiInfo:**
+
+| Propiedad | Tipo | Descripción |
+|---|---|---|
+| `HasWaiting` | `bool` | Si hay mensajes en espera |
+| `NewMessages` | `int` | Número de mensajes nuevos |
+| `OldMessages` | `int` | Número de mensajes ya escuchados |
+| `NewUrgentMessages` | `int` | Mensajes urgentes nuevos |
+| `OldUrgentMessages` | `int` | Mensajes urgentes ya escuchados |
+| `AccountUri` | `string?` | URI de la cuenta asociada |
+
+### Custom Headers
+
+Enviar headers SIP personalizados en llamadas.
+
+```csharp
+using PjSip.Net.Calls;
+
+var headers = new[]
+{
+    new SipHeader { Name = "X-Tenant-Id", Value = "acme-corp" },
+    new SipHeader { Name = "X-Call-Tag", Value = "soporte-nivel2" }
+};
+
+// En MakeCall
+var call = phone.MakeCall(account, "sip:1002@pbx.com", headers);
+
+// O desde la cuenta
+var call2 = account.MakeCall("sip:1003@pbx.com", headers);
+
+// Leer headers de una llamada
+foreach (var h in call.CustomHeaders)
+    Console.WriteLine($"{h.Name}: {h.Value}");
+
+// Al contestar con headers
+call.Answer(200, new[]
+{
+    new SipHeader { Name = "X-Agent-Id", Value = "42" }
+});
+```
+
+### Transferencia Atendida
+
+Conectar dos llamadas activas (transferencia con consulta previa).
+
+```csharp
+// Llamada activa con el cliente
+var callCliente = phone.MakeCall(account, "sip:cliente@example.com");
+// ... el cliente está en línea ...
+
+// Poner al cliente en espera
+callCliente.Hold();
+
+// Llamar al especialista para consultar
+var callEspecialista = phone.MakeCall(account, "sip:especialista@example.com");
+// ... hablar con el especialista ...
+
+// Conectar al cliente con el especialista (transferencia atendida)
+callCliente.AttendedTransfer(callEspecialista);
+// Ambas llamadas se desconectan del agente; cliente y especialista quedan conectados
+```
+
+### Monitor de Red
+
+Detectar cambios de red y re-registrar cuentas automáticamente.
+
+```csharp
+var network = phone.Network;
+
+// Estado actual
+Console.WriteLine($"Red: {network.CurrentState}");
+
+// Escuchar cambios
+network.NetworkStateChanged += (s, e) =>
+{
+    Console.WriteLine($"Red cambió: {e.OldState} -> {e.NewState}");
+
+    if (e.NewState == NetworkState.Disconnected)
+        Console.WriteLine("Sin conectividad de red");
+};
+
+// Notificar manualmente un cambio de red (ej: desde eventos del OS)
+await network.HandleNetworkChangeAsync();
 ```
 
 ---
@@ -879,33 +1747,42 @@ using PjSip.Net.Interop.Generated;
 ```
 Tu Aplicación (WinForms / WPF / MAUI / Console)
     │
-    ├── PjSip.Net                    SDK de alto nivel
-    │   ├── ISipPhone                  Facade principal
-    │   ├── ISipAccount                Gestión de cuentas
-    │   ├── ISipCall                   Control de llamadas
-    │   ├── ISipAudioManager           Dispositivos de audio
-    │   ├── DI (AddPjSip)             Inyección de dependencias
-    │   └── Events                     Eventos .NET estándar
+    ├── PjSip.Net                        SDK de alto nivel
+    │   ├── ISipPhone                      Facade principal
+    │   ├── ISipAccount                    Gestión de cuentas (DND, Forwarding, MWI)
+    │   ├── ISipCall                       Control de llamadas (Hold, Transfer, Headers)
+    │   ├── ISipAudioManager               Dispositivos de audio
+    │   ├── ISipCodecManager               Codecs de audio
+    │   ├── ISipPresenceManager            Presencia y BLF
+    │   ├── ISipMessaging                  Mensajería SIP (MESSAGE)
+    │   ├── ISipConferenceBridge           Conferencia de audio
+    │   ├── ISipCallRecorder               Grabación de llamadas
+    │   ├── ISipToneGenerator              Generador de tonos
+    │   ├── ISipCallQualityMonitor         Calidad de llamada (RTP, MOS)
+    │   ├── ISipCallHistory                Historial de llamadas
+    │   ├── ISipNetworkMonitor             Monitor de red
+    │   ├── DI (AddPjSip)                 Inyección de dependencias
+    │   └── Events                         Eventos .NET estándar
     │       │
-    │       └── PjSip.Net.Interop    Capa de interop (SWIG)
-    │           ├── NativeLoader       Carga de librería nativa cross-platform
-    │           └── Generated/         Clases C# generadas por SWIG
+    │       └── PjSip.Net.Interop        Capa de interop (SWIG)
+    │           ├── NativeLoader           Carga de librería nativa cross-platform
+    │           └── Generated/             Clases C# generadas por SWIG
     │               │
     │               └── [DllImport("pjsua2")]  ──►  pjsua2 nativo
     │
-    └── PjSip.Net.Native.{Platform}  Binarios nativos por plataforma
-        └── runtimes/{rid}/native/     pjsua2.dll / libpjsua2.dylib / .so
+    └── PjSip.Net.Native.{Platform}      Binarios nativos por plataforma
+        └── runtimes/{rid}/native/         pjsua2.dll / libpjsua2.dylib / .so
 ```
 
 **Design Patterns utilizados:**
 
 | Pattern | Uso |
 |---|---|
-| **Facade** | `ISipPhone` como entry point único |
-| **Options** | `SipPhoneOptions`, `SipAccountOptions` via `IOptions<T>` |
-| **Observer** | Eventos .NET (`IncomingCall`, `CallStateChanged`, etc.) |
-| **Factory** | `AddAccount()`, `MakeCall()` |
-| **Adapter** | `ManagedAccount`/`ManagedCall` adaptan callbacks pjsua2 a eventos .NET |
+| **Facade** | `ISipPhone` como entry point único con 11 sub-managers |
+| **Options** | `SipPhoneOptions`, `SipAccountOptions`, `NatOptions` via `IOptions<T>` |
+| **Observer** | Eventos .NET (`IncomingCall`, `CallStateChanged`, `BuddyStateChanged`, etc.) |
+| **Factory** | `AddAccount()`, `MakeCall()`, `AddBuddy()` |
+| **Adapter** | `ManagedAccount`/`ManagedCall`/`ManagedBuddy` adaptan callbacks pjsua2 a eventos .NET |
 | **Dispose** | Limpieza en cascada de recursos nativos |
 
 ---

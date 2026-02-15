@@ -1,0 +1,9 @@
+<!-- To learn more about WinUI, the WinUI project structure,
+     and more about our project templates, see: http://aka.ms/winui-project-info. -->
+<maui:MauiWinUIApplication
+    x:Class="PjSip.Net.Sample.Maui.WinUI.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:maui="using:Microsoft.Maui"
+    xmlns:local="using:PjSip.Net.Sample.Maui.WinUI">
+</maui:MauiWinUIApplication>

@@ -6,6 +6,7 @@
     <PackageTags>pjsip;sip;voip;interop;pjsua2</PackageTags>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <NoWarn>$(NoWarn);CA2255</NoWarn>
+    <LangVersion>default</LangVersion>
   </PropertyGroup>
 
 </Project>

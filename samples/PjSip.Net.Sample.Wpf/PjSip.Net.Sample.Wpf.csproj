@@ -5,6 +5,7 @@
     <OutputType>WinExe</OutputType>
     <UseWPF>true</UseWPF>
     <IsPackable>false</IsPackable>
+    <LangVersion>default</LangVersion>
   </PropertyGroup>
 
   <ItemGroup>

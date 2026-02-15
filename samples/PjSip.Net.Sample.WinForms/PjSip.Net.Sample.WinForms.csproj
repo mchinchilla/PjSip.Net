@@ -5,6 +5,7 @@
     <OutputType>WinExe</OutputType>
     <UseWindowsForms>true</UseWindowsForms>
     <IsPackable>false</IsPackable>
+    <LangVersion>default</LangVersion>
   </PropertyGroup>
 
   <ItemGroup>
