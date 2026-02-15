@@ -15,11 +15,41 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: read
+      actions: read
 
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Download native binaries from latest native-build
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "Finding latest successful native-build run..."
+          RUN_ID=$(gh run list --workflow=native-build.yml --status=success --limit=1 --json databaseId --jq '.[0].databaseId')
+          if [ -z "$RUN_ID" ]; then
+            echo "ERROR: No successful native-build run found"
+            exit 1
+          fi
+          echo "Downloading native binaries from run $RUN_ID"
+          gh run download "$RUN_ID" --name all-native-binaries --dir native-dl
+
+          echo "Copying native binaries to runtimes directories..."
+          cp native-dl/native-win-x64/pjsua2.dll \
+             src/PjSip.Net.Native.Win64/runtimes/win-x64/native/
+          cp native-dl/native-osx-arm64/libpjsua2.dylib \
+             src/PjSip.Net.Native.MacOS/runtimes/osx-arm64/native/
+          cp native-dl/native-osx-x64/libpjsua2.dylib \
+             src/PjSip.Net.Native.MacOS/runtimes/osx-x64/native/
+          cp native-dl/native-android-arm64/libpjsua2.so \
+             src/PjSip.Net.Native.Android/runtimes/android-arm64/native/
+          cp native-dl/native-ios-arm64/libpjsua2.dylib \
+             src/PjSip.Net.Native.iOS/runtimes/ios-arm64/native/
+
+          echo "Native binaries placed:"
+          find src -name "*.dll" -o -name "*.dylib" -o -name "*.so" | grep runtimes
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -92,6 +122,30 @@ jobs:
               -p:VersionSuffix=${{ steps.version.outputs.suffix }}
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
+
+      - name: Verify native packages contain binaries
+        shell: pwsh
+        run: |
+          $checks = @{
+            "PjSip.Net.Native.Win64"    = "pjsua2.dll"
+            "PjSip.Net.Native.MacOS"    = "libpjsua2.dylib"
+            "PjSip.Net.Native.Android"  = "libpjsua2.so"
+            "PjSip.Net.Native.iOS"      = "libpjsua2.dylib"
+          }
+          $failed = $false
+          foreach ($entry in $checks.GetEnumerator()) {
+            $pkg = Get-ChildItem "artifacts/$($entry.Key).*.nupkg" | Select-Object -First 1
+            if (-not $pkg) { Write-Error "Package not found: $($entry.Key)"; $failed = $true; continue }
+            $zipEntries = [System.IO.Compression.ZipFile]::OpenRead($pkg.FullName).Entries.FullName
+            $found = $zipEntries | Where-Object { $_ -like "*$($entry.Value)" }
+            if ($found) {
+              Write-Host "OK: $($pkg.Name) contains $found"
+            } else {
+              Write-Error "MISSING: $($pkg.Name) does not contain $($entry.Value)"
+              $failed = $true
+            }
+          }
+          if ($failed) { exit 1 }
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
