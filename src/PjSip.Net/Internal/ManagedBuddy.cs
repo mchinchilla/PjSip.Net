@@ -130,8 +130,26 @@ internal sealed class ManagedBuddy : ISipBuddy
         {
             var info = _native.getInfo();
             var status = info.presStatus.status;
-            _logger.LogDebug("Buddy {Uri} native state: status={Status} activity={Activity} statusText={Text}",
-                Uri, status, info.presStatus.activity, info.presStatus.statusText);
+            _logger.LogDebug(
+                "Buddy {Uri} native state: status={Status} activity={Activity} statusText={Text} subState={SubState}({SubStateName}) termCode={TermCode} termReason={TermReason}",
+                Uri, status, info.presStatus.activity, info.presStatus.statusText,
+                info.subState, info.subStateName, (int)info.subTermCode, info.subTermReason);
+
+            // If the subscription was terminated/rejected, the presence data is unreliable
+            if (info.subState == pjsip_evsub_state.PJSIP_EVSUB_STATE_TERMINATED)
+            {
+                _logger.LogWarning(
+                    "Buddy {Uri} subscription terminated (code={TermCode}, reason={TermReason}). Presence data unreliable.",
+                    Uri, (int)info.subTermCode, info.subTermReason);
+
+                // Don't report Offline if subscription failed — we simply don't know
+                if (status == pjsua_buddy_status.PJSUA_BUDDY_STATUS_OFFLINE)
+                {
+                    SetState(BuddyState.Unknown, "Subscription terminated");
+                    ScheduleResubscribe();
+                    return;
+                }
+            }
 
             var newState = status switch
             {
@@ -169,6 +187,30 @@ internal sealed class ManagedBuddy : ISipBuddy
         {
             _logger.LogWarning(ex, "Error reading buddy state for {Uri}", Uri);
         }
+    }
+
+    private void ScheduleResubscribe()
+    {
+        if (_disposed) return;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(30));
+                if (_disposed || _native is null || _account?.Native is null) return;
+
+                _logger.LogInformation("Re-subscribing buddy {Uri} after terminated subscription", Uri);
+                await _endpointManager.Invoker.InvokeAsync(() =>
+                {
+                    _native.subscribePresence(true);
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Re-subscribe attempt failed for buddy {Uri}", Uri);
+            }
+        });
     }
 
     public void Dispose()

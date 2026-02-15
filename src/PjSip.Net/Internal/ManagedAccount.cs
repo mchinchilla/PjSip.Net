@@ -237,9 +237,11 @@ internal sealed class ManagedAccount : ISipAccount
     /// <summary>
     /// Called from the native bridge when an incoming call arrives.
     /// </summary>
-    internal void OnNativeIncomingCall(int callId)
+    internal void OnNativeIncomingCall(int callId, string? rawSipMessage = null)
     {
         var call = new ManagedCall(this, callId, _endpointManager, _logger);
+        if (!string.IsNullOrEmpty(rawSipMessage))
+            call.ParseSipHeaders(rawSipMessage);
         OnIncomingCall(call);
     }
 
@@ -347,7 +349,7 @@ internal sealed class ManagedAccount : ISipAccount
             {
                 _logger.LogInformation("Incoming call on account {Uri}, callId={CallId}",
                     _managed.Uri, prm.callId);
-                _managed.OnNativeIncomingCall(prm.callId);
+                _managed.OnNativeIncomingCall(prm.callId, prm.rdata?.wholeMsg);
             }
             catch (Exception ex)
             {

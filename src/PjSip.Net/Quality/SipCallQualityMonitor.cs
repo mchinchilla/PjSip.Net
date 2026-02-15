@@ -43,6 +43,12 @@ internal sealed class SipCallQualityMonitor : ISipCallQualityMonitor
 
     private CallQualityInfo? GetQualityFromNative(ManagedCall call)
     {
+        if (call.State == Calls.SipCallState.Disconnected)
+        {
+            _logger.LogDebug("Call {CallId} already disconnected, skipping quality poll", call.Id);
+            return null;
+        }
+
         if (call.AudioMedia is null)
         {
             _logger.LogDebug("No audio media for call {CallId}, cannot get quality", call.Id);

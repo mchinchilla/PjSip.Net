@@ -34,7 +34,7 @@ internal sealed class SipToneGenerator : ISipToneGenerator
         }
     }
 
-    public void PlayTones(IEnumerable<ToneDescriptor> tones)
+    public void PlayTones(IEnumerable<ToneDescriptor> tones, bool loop = true)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
@@ -70,7 +70,7 @@ internal sealed class SipToneGenerator : ISipToneGenerator
                     toneDescVec.Add(td);
                 }
 
-                _toneGen.play(toneDescVec, true);
+                _toneGen.play(toneDescVec, loop);
 
                 // Connect to playback device
                 var playMedia = ep.audDevManager().getPlaybackDevMedia();

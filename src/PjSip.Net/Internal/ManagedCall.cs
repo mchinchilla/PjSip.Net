@@ -123,6 +123,31 @@ internal sealed class ManagedCall : ISipCall
     public bool IsOnHold { get; private set; }
 
     /// <summary>
+    /// Parses SIP headers from a raw SIP message and populates <see cref="CustomHeaders"/>.
+    /// </summary>
+    internal void ParseSipHeaders(string rawSipMessage)
+    {
+        // SIP headers are separated from the body by a blank line (\r\n\r\n).
+        // Each header is on its own line: "Header-Name: value\r\n"
+        var headerEnd = rawSipMessage.IndexOf("\r\n\r\n", StringComparison.Ordinal);
+        var headerSection = headerEnd >= 0 ? rawSipMessage[..headerEnd] : rawSipMessage;
+
+        foreach (var line in headerSection.Split("\r\n"))
+        {
+            var colonIndex = line.IndexOf(':');
+            if (colonIndex <= 0) continue;
+
+            var name = line[..colonIndex].Trim();
+            var value = line[(colonIndex + 1)..].Trim();
+
+            // Skip standard SIP first-line (e.g. "INVITE sip:...") and empty values
+            if (name.Contains(' ') || string.IsNullOrEmpty(value)) continue;
+
+            _customHeaders.Add(new SipHeader { Name = name, Value = value });
+        }
+    }
+
+    /// <summary>
     /// The connected AudioMedia for this call, if any.
     /// Used by recording, conference bridge, and mute operations.
     /// </summary>
