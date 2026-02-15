@@ -44,7 +44,7 @@ internal sealed class SipPhone : ISipPhone
         _options = options.Value;
         _logger = logger;
 
-        _audioManager = new SipAudioManager(endpointManager);
+        _audioManager = new SipAudioManager(endpointManager, logger);
         _codecManager = new SipCodecManager(endpointManager, logger);
         _presenceManager = new SipPresenceManager(endpointManager, logger);
         _messaging = new SipMessaging(endpointManager, logger);
@@ -105,7 +105,9 @@ internal sealed class SipPhone : ISipPhone
                 }
             }
 
-            _networkMonitor.StartMonitoring();
+            // Network monitoring disabled — pjsip handles IP changes internally.
+            // Manual monitoring via HandleNetworkChangeAsync() is still available.
+            // _networkMonitor.StartMonitoring();
 
             State = SipPhoneState.Running;
             _logger.LogInformation("SipPhone started with {AccountCount} account(s)", _accounts.Count);

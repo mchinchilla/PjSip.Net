@@ -78,14 +78,21 @@ internal sealed class SipNetworkMonitor : ISipNetworkMonitor
         });
     }
 
-    private void OnNetworkAvailabilityChanged(object? sender, NetworkAvailabilityEventArgs e)
+    private async void OnNetworkAvailabilityChanged(object? sender, NetworkAvailabilityEventArgs e)
     {
         if (_disposed) return;
 
         if (e.IsAvailable)
         {
             _logger.LogInformation("Network became available, triggering IP change handling");
-            _ = HandleNetworkChangeAsync();
+            try
+            {
+                await HandleNetworkChangeAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error handling network availability change");
+            }
         }
         else
         {
@@ -94,12 +101,19 @@ internal sealed class SipNetworkMonitor : ISipNetworkMonitor
         }
     }
 
-    private void OnNetworkAddressChanged(object? sender, EventArgs e)
+    private async void OnNetworkAddressChanged(object? sender, EventArgs e)
     {
         if (_disposed) return;
 
         _logger.LogInformation("Network address changed, triggering IP change handling");
-        _ = HandleNetworkChangeAsync();
+        try
+        {
+            await HandleNetworkChangeAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error handling network address change");
+        }
     }
 
     public void Dispose()

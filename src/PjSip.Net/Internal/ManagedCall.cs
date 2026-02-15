@@ -143,6 +143,21 @@ internal sealed class ManagedCall : ISipCall
         }
     }
 
+    /// <summary>
+    /// Gets stream info (codec, direction, etc.) for the specified media index via the native call bridge.
+    /// Must be called on the PJSIP worker thread.
+    /// </summary>
+    internal StreamInfo? GetStreamInfo(uint mediaIndex = 0)
+    {
+        if (_native is null) return null;
+        try { return _native.getStreamInfo(mediaIndex); }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Failed to get stream info for call {CallId} media index {Index}", Id, mediaIndex);
+            return null;
+        }
+    }
+
     public event EventHandler<CallStateChangedEventArgs>? StateChanged;
     public event EventHandler<CallMediaStateChangedEventArgs>? MediaStateChanged;
 

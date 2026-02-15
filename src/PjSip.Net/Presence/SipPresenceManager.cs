@@ -65,8 +65,7 @@ internal sealed class SipPresenceManager : ISipPresenceManager
 
         _logger.LogInformation("Added buddy {Uri}, starting presence subscription", uri);
 
-        // Fire-and-forget subscribe; errors are logged inside SubscribeAsync
-        _ = buddy.SubscribeAsync();
+        _ = SubscribeBuddyAsync(buddy);
 
         return buddy;
     }
@@ -124,6 +123,18 @@ internal sealed class SipPresenceManager : ISipPresenceManager
                 catch (Exception ex) { _logger.LogWarning(ex, "Error setting presence on account {Uri}", account.Uri); }
             }
         });
+    }
+
+    private async Task SubscribeBuddyAsync(ManagedBuddy buddy)
+    {
+        try
+        {
+            await buddy.SubscribeAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error subscribing to buddy presence for {Uri}", buddy.Uri);
+        }
     }
 
     private void OnBuddyStateChanged(object? sender, BuddyStateChangedEventArgs e)

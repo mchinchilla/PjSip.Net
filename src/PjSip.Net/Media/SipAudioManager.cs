@@ -6,14 +6,16 @@ namespace PjSip.Net.Media;
 internal sealed class SipAudioManager : ISipAudioManager
 {
     private readonly PjSipEndpointManager _endpointManager;
+    private readonly ILogger _logger;
     private IReadOnlyList<AudioDeviceInfo>? _cachedInputDevices;
     private IReadOnlyList<AudioDeviceInfo>? _cachedOutputDevices;
     private float _inputLevel = 1.0f;
     private float _outputLevel = 1.0f;
 
-    public SipAudioManager(PjSipEndpointManager endpointManager)
+    public SipAudioManager(PjSipEndpointManager endpointManager, ILogger logger)
     {
         _endpointManager = endpointManager;
+        _logger = logger;
     }
 
     public AudioDeviceInfo? CurrentInputDevice { get; private set; }
@@ -145,9 +147,9 @@ internal sealed class SipAudioManager : ISipAudioManager
             var capMedia = ep.audDevManager().getCaptureDevMedia();
             capMedia.adjustRxLevel(level);
         }
-        catch
+        catch (Exception ex)
         {
-            // No active media or endpoint not ready
+            _logger.LogDebug(ex, "Failed to adjust input level — no active media or endpoint not ready");
         }
     }
 
@@ -161,9 +163,9 @@ internal sealed class SipAudioManager : ISipAudioManager
             var playMedia = ep.audDevManager().getPlaybackDevMedia();
             playMedia.adjustRxLevel(level);
         }
-        catch
+        catch (Exception ex)
         {
-            // No active media or endpoint not ready
+            _logger.LogDebug(ex, "Failed to adjust output level — no active media or endpoint not ready");
         }
     }
 }
