@@ -417,7 +417,7 @@ jobs:
           cd pjproject
           IOS_SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
           echo "=== Compiling iOS-specific Objective-C sources ==="
-          find . -name "*.m" -path "*/src/*" | while read mfile; do
+          find . -name "*.m" -path "*/src/*" ! -path "*/pjsip-apps/*" | while read mfile; do
             ofile="${mfile%.m}.o"
             echo "Compiling $mfile -> $ofile"
             xcrun -sdk iphoneos clang \
@@ -458,7 +458,7 @@ jobs:
               -c pjsua2_wrap.cpp -o pjsua2_wrap.o
 
           pj_libs=$(find "$GITHUB_WORKSPACE/pjproject" -name "*.a" -path "*/lib/*" | tr '\n' ' ')
-          objc_objs=$(find "$GITHUB_WORKSPACE/pjproject" -name "*.o" -path "*/src/*.o" ! -name "pjsua2_wrap.o" 2>/dev/null | tr '\n' ' ')
+          objc_objs=$(find "$GITHUB_WORKSPACE/pjproject" -name "*.o" -path "*/src/*.o" ! -name "pjsua2_wrap.o" ! -path "*/pjsip-apps/*" 2>/dev/null | tr '\n' ' ')
           echo "Linking with libs: $pj_libs"
           echo "Linking with ObjC objects: $objc_objs"
           xcrun -sdk iphoneos clang++ \
