@@ -188,7 +188,7 @@ jobs:
           path: src/PjSip.Net.Native.MacOS/runtimes/osx-arm64/native/libpjsua2.dylib
 
   build-macos-x64:
-    runs-on: macos-13
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
 
@@ -201,10 +201,13 @@ jobs:
       - name: Copy config_site.h
         run: cp native/config_site.h pjproject/pjlib/include/pj/config_site.h
 
-      - name: Configure pjproject
+      - name: Configure pjproject for x86_64
         run: |
           cd pjproject
-          ./configure
+          export CFLAGS="-arch x86_64"
+          export CXXFLAGS="-arch x86_64"
+          export LDFLAGS="-arch x86_64"
+          ./configure --host=x86_64-apple-darwin
           make dep
 
       - name: Build pjproject libraries
@@ -236,7 +239,7 @@ jobs:
       - name: Compile SWIG wrapper
         run: |
           cd pjproject/pjsip-apps/src/swig/csharp
-          g++ -c -std=c++14 -arch x86_64 -O2 \
+          clang++ -c -std=c++14 -arch x86_64 -O2 \
               -I"$GITHUB_WORKSPACE/pjproject/pjlib/include" \
               -I"$GITHUB_WORKSPACE/pjproject/pjlib-util/include" \
               -I"$GITHUB_WORKSPACE/pjproject/pjmedia/include" \
@@ -250,7 +253,7 @@ jobs:
           cd pjproject/pjsip-apps/src/swig/csharp
           pj_libs=$(find "$GITHUB_WORKSPACE/pjproject" -name "*.a" -path "*/lib/*" | tr '\n' ' ')
           echo "Linking with: $pj_libs"
-          g++ -shared -arch x86_64 -o libpjsua2.dylib \
+          clang++ -shared -arch x86_64 -o libpjsua2.dylib \
               pjsua2_wrap.o \
               $pj_libs \
               -framework CoreAudio -framework AudioToolbox -framework AVFoundation \
@@ -409,6 +412,22 @@ jobs:
           find . -name "*.a" -path "*/lib/*"
           test -n "$(find . -name '*.a' -path '*/lib/*' -print -quit)" || { echo "ERROR: No .a libraries found"; exit 1; }
 
+      - name: Compile iOS Objective-C sources
+        run: |
+          cd pjproject
+          IOS_SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
+          echo "=== Compiling iOS-specific Objective-C sources ==="
+          find . -name "*.m" -path "*/src/*" | while read mfile; do
+            ofile="${mfile%.m}.o"
+            echo "Compiling $mfile -> $ofile"
+            xcrun -sdk iphoneos clang \
+                -arch arm64 -isysroot "$IOS_SDK" -miphoneos-version-min=16.0 \
+                -I"pjlib/include" -I"pjlib-util/include" -I"pjmedia/include" \
+                -I"pjsip/include" -I"pjnath/include" \
+                -DPJ_AUTOCONF=1 \
+                -c "$mfile" -o "$ofile" || echo "WARNING: Failed to compile $mfile"
+          done
+
       - name: Run SWIG
         run: |
           cd pjproject/pjsip-apps/src/swig/csharp
@@ -439,12 +458,15 @@ jobs:
               -c pjsua2_wrap.cpp -o pjsua2_wrap.o
 
           pj_libs=$(find "$GITHUB_WORKSPACE/pjproject" -name "*.a" -path "*/lib/*" | tr '\n' ' ')
-          echo "Linking with: $pj_libs"
+          objc_objs=$(find "$GITHUB_WORKSPACE/pjproject" -name "*.o" -path "*/src/*.o" ! -name "pjsua2_wrap.o" 2>/dev/null | tr '\n' ' ')
+          echo "Linking with libs: $pj_libs"
+          echo "Linking with ObjC objects: $objc_objs"
           xcrun -sdk iphoneos clang++ \
               -arch arm64 -isysroot "$IOS_SDK" -miphoneos-version-min=16.0 \
               -dynamiclib -install_name @rpath/libpjsua2.dylib \
               -o libpjsua2.dylib \
               pjsua2_wrap.o \
+              $objc_objs \
               $pj_libs \
               -framework CoreAudio -framework AudioToolbox -framework AVFoundation \
               -framework CoreMedia -framework Security -framework SystemConfiguration \
