@@ -34,10 +34,12 @@ jobs:
           )
 
       - name: List built libraries
-        shell: cmd
+        shell: powershell
         run: |
-          echo === Libraries in pjproject\lib ===
-          dir /s /b pjproject\lib\*.lib 2>nul || echo "No .lib files found"
+          Write-Host "=== Searching for .lib files ==="
+          $libs = Get-ChildItem -Path pjproject -Recurse -Filter *.lib -ErrorAction SilentlyContinue
+          if ($libs) { $libs | ForEach-Object { Write-Host $_.FullName } }
+          else { Write-Host "WARNING: No .lib files found" }
 
       - name: Run SWIG
         shell: cmd
@@ -58,7 +60,7 @@ jobs:
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
           cd pjproject\pjsip-apps\src\swig\csharp
-          cl /nologo /MD /EHsc /O2 /DNDEBUG /DPJ_DLL=1 /DPJ_EXPORTING=1 ^
+          cl /nologo /MD /EHsc /std:c++14 /O2 /DNDEBUG /DPJ_DLL=1 /DPJ_EXPORTING=1 ^
              /I"..\..\..\..\pjlib\include" ^
              /I"..\..\..\..\pjlib-util\include" ^
              /I"..\..\..\..\pjmedia\include" ^
@@ -66,17 +68,24 @@ jobs:
              /I"..\..\..\..\pjnath\include" ^
              /c pjsua2_wrap.cpp /Fo:pjsua2_wrap.obj
 
+      - name: Collect pjproject lib paths
+        shell: powershell
+        run: |
+          $libs = Get-ChildItem -Path "$env:GITHUB_WORKSPACE\pjproject" -Recurse -Filter *.lib |
+                  Where-Object { $_.DirectoryName -match '\\lib$' }
+          Write-Host "Found $($libs.Count) pjproject .lib files:"
+          $libs | ForEach-Object { Write-Host "  $($_.FullName)" }
+          $libList = ($libs | ForEach-Object { "`"$($_.FullName)`"" }) -join " "
+          echo "PJLIBS=$libList" >> $env:GITHUB_ENV
+
       - name: Link pjsua2.dll
         shell: cmd
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
           cd pjproject\pjsip-apps\src\swig\csharp
-          setlocal enabledelayedexpansion
-          set "PJLIBS="
-          for %%f in ("%GITHUB_WORKSPACE%\pjproject\lib\*.lib") do set "PJLIBS=!PJLIBS! "%%f""
-          echo Found pjproject libs: !PJLIBS!
+          echo Linking with: %PJLIBS%
           link /nologo /DLL /OUT:pjsua2.dll pjsua2_wrap.obj ^
-               !PJLIBS! ^
+               %PJLIBS% ^
                ws2_32.lib Iphlpapi.lib dsound.lib dxguid.lib netapi32.lib ^
                mswsock.lib ole32.lib user32.lib gdi32.lib advapi32.lib ^
                Secur32.lib Crypt32.lib
@@ -136,7 +145,7 @@ jobs:
       - name: Compile SWIG wrapper
         run: |
           cd pjproject/pjsip-apps/src/swig/csharp
-          g++ -c -arch arm64 -O2 \
+          g++ -c -std=c++14 -arch arm64 -O2 \
               -I"$GITHUB_WORKSPACE/pjproject/pjlib/include" \
               -I"$GITHUB_WORKSPACE/pjproject/pjlib-util/include" \
               -I"$GITHUB_WORKSPACE/pjproject/pjmedia/include" \
@@ -211,7 +220,7 @@ jobs:
       - name: Compile SWIG wrapper
         run: |
           cd pjproject/pjsip-apps/src/swig/csharp
-          g++ -c -arch x86_64 -O2 \
+          g++ -c -std=c++14 -arch x86_64 -O2 \
               -I"$GITHUB_WORKSPACE/pjproject/pjlib/include" \
               -I"$GITHUB_WORKSPACE/pjproject/pjlib-util/include" \
               -I"$GITHUB_WORKSPACE/pjproject/pjmedia/include" \
@@ -384,6 +393,7 @@ jobs:
           cd pjproject/pjsip-apps/src/swig/csharp
           IOS_SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
           xcrun -sdk iphoneos clang++ \
+              -std=c++14 \
               -arch arm64 -isysroot "$IOS_SDK" -miphoneos-version-min=16.0 \
               -I"$GITHUB_WORKSPACE/pjproject/pjlib/include" \
               -I"$GITHUB_WORKSPACE/pjproject/pjlib-util/include" \
