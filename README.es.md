@@ -1,21 +1,54 @@
 [English](README.md) | **[Español](README.es.md)**
 
-# PjSip.Net
+<div align="center">
 
-SDK de alto nivel para integrar telefonía SIP en aplicaciones .NET 10. Basado en [PJSIP 2.16](https://www.pjsip.org/) con soporte TLS nativo (Schannel en Windows), compatible con **WinForms**, **WPF**, **MAUI** y **Console**.
+# ☎️ PjSip.Net
 
-## Tabla de Contenidos
+**SDK de alto nivel para telefonía SIP en .NET 10**
 
-- [Requisitos](#requisitos)
-- [Instalación](#instalación)
-- [Inicio Rápido](#inicio-rápido)
-- [Configuración](#configuración)
+[![NuGet](https://img.shields.io/nuget/v/PjSip.Net?logo=nuget&label=PjSip.Net)](https://www.nuget.org/packages/PjSip.Net)
+[![NuGet Downloads](https://img.shields.io/nuget/dt/PjSip.Net?logo=nuget&color=blue)](https://www.nuget.org/packages/PjSip.Net)
+[![Build Native](https://img.shields.io/github/actions/workflow/status/mchinchilla/PjSip.Net/native-build.yml?branch=master&logo=github&label=native%20build)](https://github.com/mchinchilla/PjSip.Net/actions/workflows/native-build.yml)
+[![Release](https://img.shields.io/github/actions/workflow/status/mchinchilla/PjSip.Net/release.yml?logo=github&label=release)](https://github.com/mchinchilla/PjSip.Net/actions/workflows/release.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE.txt)
+[![.NET 10](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet)](https://dotnet.microsoft.com/)
+
+Basado en [PJSIP 2.16](https://www.pjsip.org/) con soporte TLS nativo (Schannel en Windows)
+Compatible con **WinForms** · **WPF** · **MAUI** · **Console**
+
+</div>
+
+---
+
+### ✨ Características Principales
+
+| | Característica | Descripción |
+|---|---|---|
+| 📞 | **Gestión de Llamadas** | Realizar, recibir, retener, transferir y grabar llamadas |
+| 🔒 | **TLS Nativo** | Schannel (Windows), Secure Transport (macOS/iOS) — sin necesidad de OpenSSL |
+| 👥 | **Presencia y BLF** | Monitorear disponibilidad de usuarios con SUBSCRIBE/NOTIFY |
+| 🎙️ | **Control de Audio** | Selección de dispositivo, volumen, silencio, gestión de codecs |
+| 🔀 | **Conferencia** | Puente de audio multi-participante con merge/split |
+| 💬 | **Mensajería SIP** | Enviar y recibir mensajes de texto via SIP MESSAGE (RFC 3428) |
+| 📊 | **Calidad de Llamada** | Estadísticas RTP en tiempo real, jitter, pérdida de paquetes, MOS score |
+| 🌐 | **NAT Traversal** | Soporte integrado para STUN, ICE y TURN |
+| 💉 | **Inyección de Dependencias** | Integración de primera clase con `IServiceCollection` |
+| 📱 | **Multi-Plataforma** | Windows, macOS, Android, iOS desde una sola API |
+
+---
+
+## 📑 Tabla de Contenidos
+
+- [Requisitos](#-requisitos)
+- [Instalación](#-instalación)
+- [Inicio Rápido](#-inicio-rápido)
+- [Configuración](#️-configuración)
   - [SipPhoneOptions](#sipphoneoptions)
   - [SipAccountOptions](#sipaccountoptions)
-  - [Transporte y TLS](#transporte-y-tls)
-  - [NAT/STUN/ICE/TURN](#natstun-iceturn)
-- [Inyección de Dependencias](#inyección-de-dependencias)
-- [API Reference](#api-reference)
+  - [Transporte y TLS](#-transporte-y-tls)
+  - [NAT/STUN/ICE/TURN](#-natstuniceurn)
+- [Inyección de Dependencias](#-inyección-de-dependencias)
+- [API Reference](#-api-reference)
   - [ISipPhone](#isipphone)
   - [ISipAccount](#isipaccount)
   - [ISipCall](#isipcall)
@@ -29,41 +62,24 @@ SDK de alto nivel para integrar telefonía SIP en aplicaciones .NET 10. Basado e
   - [ISipCallQualityMonitor](#isipcallqualitymonitor)
   - [ISipCallHistory](#isipcallhistory)
   - [ISipNetworkMonitor](#isipnetworkmonitor)
-- [Eventos](#eventos)
-- [Features Avanzados](#features-avanzados)
-  - [Presencia y BLF](#presencia-y-blf)
-  - [Mensajería SIP (MESSAGE)](#mensajería-sip-message)
-  - [Conferencia](#conferencia)
-  - [Grabación de Llamadas](#grabación-de-llamadas)
-  - [Generador de Tonos](#generador-de-tonos)
-  - [Calidad de Llamada](#calidad-de-llamada)
-  - [Historial de Llamadas](#historial-de-llamadas)
-  - [Do Not Disturb (DND)](#do-not-disturb-dnd)
-  - [Desvío de Llamadas](#desvío-de-llamadas)
-  - [Message Waiting Indicator (MWI)](#message-waiting-indicator-mwi)
-  - [Custom Headers](#custom-headers)
-  - [Transferencia Atendida](#transferencia-atendida)
-  - [Monitor de Red](#monitor-de-red)
-- [Ejemplos por Plataforma](#ejemplos-por-plataforma)
-  - [Console App](#console-app)
-  - [WPF](#wpf)
-  - [WinForms](#winforms)
-  - [MAUI](#maui)
-- [Manejo de Errores](#manejo-de-errores)
-- [Audio](#audio)
-- [Acceso Low-Level (pjsua2)](#acceso-low-level-pjsua2)
-- [Arquitectura](#arquitectura)
-- [Plataformas Soportadas](#plataformas-soportadas)
-- [Build desde Código Fuente](#build-desde-código-fuente)
+- [Eventos](#-eventos)
+- [Features Avanzados](#-features-avanzados)
+- [Ejemplos por Plataforma](#-ejemplos-por-plataforma)
+- [Manejo de Errores](#-manejo-de-errores)
+- [Audio](#-audio)
+- [Acceso Low-Level (pjsua2)](#-acceso-low-level-pjsua2)
+- [Arquitectura](#️-arquitectura)
+- [Plataformas Soportadas](#-plataformas-soportadas)
+- [Build desde Código Fuente](#️-build-desde-código-fuente)
 
 ---
 
-## Requisitos
+## 📋 Requisitos
 
 - **.NET 10** SDK o superior
 - **Paquete nativo** correspondiente a tu plataforma (se instala automáticamente via NuGet)
 
-## Instalación
+## 📦 Instalación
 
 ```bash
 # SDK principal (obligatorio)
@@ -80,7 +96,7 @@ dotnet add package PjSip.Net.Native.iOS           # iOS arm64
 
 ---
 
-## Inicio Rápido
+## 🚀 Inicio Rápido
 
 ```csharp
 using Microsoft.Extensions.DependencyInjection;
@@ -135,7 +151,7 @@ await phone.StopAsync();
 
 ---
 
-## Configuración
+## ⚙️ Configuración
 
 ### SipPhoneOptions
 
@@ -195,7 +211,7 @@ new SipAccountOptions
 | `RegistrationTimeout` | `int` | `300` | Tiempo de expiración del REGISTER en segundos |
 | `RegisterOnAdd` | `bool` | `true` | Si `true`, envía REGISTER automáticamente al agregar la cuenta |
 
-### Transporte y TLS
+### 🔐 Transporte y TLS
 
 ```csharp
 // UDP (sin cifrar)
@@ -260,7 +276,7 @@ options.Transports.Add(new SipTransportOptions
 > **macOS/iOS:** Usa Secure Transport del sistema.
 > **Android:** Requiere OpenSSL precompilado (incluido en el paquete nativo).
 
-### NAT/STUN, ICE/TURN
+### 🌐 NAT/STUN/ICE/TURN
 
 Configuración de NAT traversal para redes detrás de firewalls o routers NAT.
 
@@ -293,7 +309,7 @@ options.Nat = new NatOptions
 
 ---
 
-## Inyección de Dependencias
+## 💉 Inyección de Dependencias
 
 ### Registro básico (Singleton)
 
@@ -398,7 +414,7 @@ public class MiServicioPresencia
 
 ---
 
-## API Reference
+## 📖 API Reference
 
 ### ISipPhone
 
@@ -553,6 +569,21 @@ public interface ISipCall : IDisposable
 | `603` | Decline — rechazar la llamada |
 
 **Estados de llamada (`SipCallState`):**
+
+```mermaid
+stateDiagram-v2
+    [*] --> Null: Created
+    Null --> Calling: MakeCall()
+    Null --> Incoming: INVITE received
+    Calling --> EarlyMedia: 183 + SDP
+    Calling --> Connecting: 200 OK
+    Incoming --> Connecting: Answer(200)
+    Incoming --> Disconnected: Hangup(603)
+    EarlyMedia --> Connecting: 200 OK
+    Connecting --> Confirmed: Media ready
+    Confirmed --> Disconnected: Hangup / BYE
+    Disconnected --> [*]
+```
 
 | Estado | Descripción |
 |---|---|
@@ -972,7 +1003,7 @@ public interface ISipNetworkMonitor : IDisposable
 
 ---
 
-## Eventos
+## 🔔 Eventos
 
 Todos los eventos se disparan en el hilo que procesó el callback de PJSIP. En aplicaciones UI (WinForms/WPF/MAUI), usa el dispatcher correspondiente para actualizar la interfaz.
 
@@ -1056,9 +1087,9 @@ call.MediaStateChanged += (sender, e) =>
 
 ---
 
-## Features Avanzados
+## 🧩 Features Avanzados
 
-### Presencia y BLF
+### 👥 Presencia y BLF
 
 Monitoreo del estado de presencia de otros usuarios (Busy Lamp Field).
 
@@ -1089,7 +1120,7 @@ await buddy.UnsubscribeAsync();
 presence.RemoveBuddy(buddy);
 ```
 
-### Mensajería SIP (MESSAGE)
+### 💬 Mensajería SIP (MESSAGE)
 
 Envío y recepción de mensajes de texto via SIP MESSAGE (RFC 3428).
 
@@ -1112,7 +1143,7 @@ messaging.MessageStatus += (s, e) =>
     Console.WriteLine($"Mensaje a {e.DestinationUri}: código {e.StatusCode}");
 ```
 
-### Conferencia
+### 🔀 Conferencia
 
 Mezclar audio de múltiples llamadas en una conferencia.
 
@@ -1141,7 +1172,7 @@ conference.SplitAll();
 conference.RemoveParticipant(call2);
 ```
 
-### Grabación de Llamadas
+### 🎙️ Grabación de Llamadas
 
 Grabar el audio de una llamada a archivo.
 
@@ -1165,7 +1196,7 @@ recorder.RecordingStateChanged += (s, e) =>
 recorder.StopRecording();
 ```
 
-### Generador de Tonos
+### 🎵 Generador de Tonos
 
 Reproducir tonos de señalización estándar o personalizados.
 
@@ -1192,7 +1223,7 @@ tones.Stop();
 Console.WriteLine($"Reproduciendo: {tones.IsPlaying}");
 ```
 
-### Calidad de Llamada
+### 📊 Calidad de Llamada
 
 Monitorear estadísticas RTP y MOS score durante una llamada activa.
 
@@ -1219,7 +1250,7 @@ quality.QualityReportAvailable += (s, e) =>
     Console.WriteLine($"Llamada {e.Call.Id}: MOS={e.Quality.MosScore:F1}");
 ```
 
-### Historial de Llamadas
+### 📋 Historial de Llamadas
 
 Historial automático de llamadas con filtrado.
 
@@ -1254,7 +1285,7 @@ history.Clear();
 
 > El tamaño máximo del historial se configura con `SipPhoneOptions.CallHistoryMaxEntries` (default: 1000).
 
-### Do Not Disturb (DND)
+### 🔕 Do Not Disturb (DND)
 
 Controlar el comportamiento de llamadas entrantes por cuenta.
 
@@ -1283,7 +1314,7 @@ account.DndMode = DndMode.Off;
 | `RejectWithBusy` | Rechaza con señal de ocupado (486 Busy Here) |
 | `SilentRing` | La llamada llega pero no suena (ring silencioso) |
 
-### Desvío de Llamadas
+### ↪️ Desvío de Llamadas
 
 Configurar call forwarding para una cuenta.
 
@@ -1315,7 +1346,7 @@ account.CallForwarding.Enabled = false;
 | `OnNoAnswer` | Desvía si no se contesta en el timeout configurado |
 | `OnNotReachable` | Desvía si la cuenta no está disponible |
 
-### Message Waiting Indicator (MWI)
+### 📬 Message Waiting Indicator (MWI)
 
 Recibir notificaciones de buzón de voz (voicemail).
 
@@ -1354,7 +1385,7 @@ if (mwi != null && mwi.HasWaiting)
 | `OldUrgentMessages` | `int` | Mensajes urgentes ya escuchados |
 | `AccountUri` | `string?` | URI de la cuenta asociada |
 
-### Custom Headers
+### 🏷️ Custom Headers
 
 Enviar headers SIP personalizados en llamadas.
 
@@ -1384,9 +1415,24 @@ call.Answer(200, new[]
 });
 ```
 
-### Transferencia Atendida
+### 🤝 Transferencia Atendida
 
 Conectar dos llamadas activas (transferencia con consulta previa).
+
+```mermaid
+sequenceDiagram
+    participant Agente
+    participant Cliente
+    participant Especialista
+
+    Agente->>Cliente: Llamada activa
+    Agente->>Agente: Hold(cliente)
+    Agente->>Especialista: MakeCall()
+    Note over Agente,Especialista: Consulta
+    Agente->>Cliente: AttendedTransfer(especialista)
+    Cliente-->>Especialista: Conectados directamente
+    Note over Agente: Ambas llamadas se desconectan
+```
 
 ```csharp
 // Llamada activa con el cliente
@@ -1405,7 +1451,7 @@ callCliente.AttendedTransfer(callEspecialista);
 // Ambas llamadas se desconectan del agente; cliente y especialista quedan conectados
 ```
 
-### Monitor de Red
+### 🌐 Monitor de Red
 
 Detectar cambios de red y re-registrar cuentas automáticamente.
 
@@ -1430,7 +1476,7 @@ await network.HandleNetworkChangeAsync();
 
 ---
 
-## Ejemplos por Plataforma
+## 📱 Ejemplos por Plataforma
 
 ### Console App
 
@@ -1655,7 +1701,7 @@ public partial class PhonePage : ContentPage
 
 ---
 
-## Manejo de Errores
+## ⚠️ Manejo de Errores
 
 El SDK define excepciones específicas para errores SIP:
 
@@ -1698,7 +1744,7 @@ PjSipException                    Base — cualquier error de PJSIP
 
 ---
 
-## Audio
+## 🎧 Audio
 
 ```csharp
 var audio = phone.Audio;
@@ -1728,7 +1774,7 @@ call.SetMute(false);  // Des-silenciar
 
 ---
 
-## Acceso Low-Level (pjsua2)
+## 🔧 Acceso Low-Level (pjsua2)
 
 Para escenarios avanzados que requieran acceso directo a las clases de pjsua2 generadas por SWIG:
 
@@ -1744,36 +1790,55 @@ using PjSip.Net.Interop.Generated;
 
 ---
 
-## Arquitectura
+## 🏗️ Arquitectura
 
-```
-Tu Aplicación (WinForms / WPF / MAUI / Console)
-    │
-    ├── PjSip.Net                        SDK de alto nivel
-    │   ├── ISipPhone                      Facade principal
-    │   ├── ISipAccount                    Gestión de cuentas (DND, Forwarding, MWI)
-    │   ├── ISipCall                       Control de llamadas (Hold, Transfer, Headers)
-    │   ├── ISipAudioManager               Dispositivos de audio
-    │   ├── ISipCodecManager               Codecs de audio
-    │   ├── ISipPresenceManager            Presencia y BLF
-    │   ├── ISipMessaging                  Mensajería SIP (MESSAGE)
-    │   ├── ISipConferenceBridge           Conferencia de audio
-    │   ├── ISipCallRecorder               Grabación de llamadas
-    │   ├── ISipToneGenerator              Generador de tonos
-    │   ├── ISipCallQualityMonitor         Calidad de llamada (RTP, MOS)
-    │   ├── ISipCallHistory                Historial de llamadas
-    │   ├── ISipNetworkMonitor             Monitor de red
-    │   ├── DI (AddPjSip)                 Inyección de dependencias
-    │   └── Events                         Eventos .NET estándar
-    │       │
-    │       └── PjSip.Net.Interop        Capa de interop (SWIG)
-    │           ├── NativeLoader           Carga de librería nativa cross-platform
-    │           └── Generated/             Clases C# generadas por SWIG
-    │               │
-    │               └── [DllImport("pjsua2")]  ──►  pjsua2 nativo
-    │
-    └── PjSip.Net.Native.{Platform}      Binarios nativos por plataforma
-        └── runtimes/{rid}/native/         pjsua2.dll / libpjsua2.dylib / .so
+```mermaid
+graph TB
+    subgraph App["Tu Aplicación"]
+        WF[WinForms]
+        WPF[WPF]
+        MAUI[MAUI]
+        CON[Console]
+    end
+
+    subgraph SDK["PjSip.Net — SDK de alto nivel"]
+        Phone[ISipPhone]
+        Account[ISipAccount]
+        Call[ISipCall]
+        Audio[ISipAudioManager]
+        Codec[ISipCodecManager]
+        Presence[ISipPresenceManager]
+        Msg[ISipMessaging]
+        Conf[ISipConferenceBridge]
+        Rec[ISipCallRecorder]
+        Tone[ISipToneGenerator]
+        QoS[ISipCallQualityMonitor]
+        Hist[ISipCallHistory]
+        Net[ISipNetworkMonitor]
+        DI["DI (AddPjSip)"]
+        Events["Eventos"]
+    end
+
+    subgraph Interop["PjSip.Net.Interop"]
+        Loader[NativeLoader]
+        SWIG["Generated/ (SWIG C#)"]
+    end
+
+    subgraph Native["PjSip.Net.Native.{Plataforma}"]
+        Win["Win64 — pjsua2.dll"]
+        Mac["MacOS — libpjsua2.dylib"]
+        And["Android — libpjsua2.so"]
+        iOS["iOS — libpjsua2.a"]
+    end
+
+    App --> SDK
+    SDK --> Interop
+    Interop --> Native
+
+    style App fill:#e1f5fe
+    style SDK fill:#f3e5f5
+    style Interop fill:#fff3e0
+    style Native fill:#e8f5e9
 ```
 
 **Design Patterns utilizados:**
@@ -1789,19 +1854,19 @@ Tu Aplicación (WinForms / WPF / MAUI / Console)
 
 ---
 
-## Plataformas Soportadas
+## 📱 Plataformas Soportadas
 
 | Plataforma | RID | TLS Backend | Paquete Nativo |
 |---|---|---|---|
-| Windows x64 | `win-x64` | Schannel | `PjSip.Net.Native.Win64` |
-| macOS x64 | `osx-x64` | OpenSSL | `PjSip.Net.Native.MacOS` |
-| macOS ARM64 | `osx-arm64` | OpenSSL | `PjSip.Net.Native.MacOS` |
-| Android ARM64 | `android-arm64` | OpenSSL | `PjSip.Net.Native.Android` |
-| iOS ARM64 | `ios-arm64` | Secure Transport | `PjSip.Net.Native.iOS` |
+| <img src="https://img.shields.io/badge/Windows-0078D6?logo=windows&logoColor=white" alt="Windows" /> | `win-x64` | Schannel | `PjSip.Net.Native.Win64` |
+| <img src="https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white" alt="macOS" /> x64 | `osx-x64` | Apple SSL | `PjSip.Net.Native.MacOS` |
+| <img src="https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white" alt="macOS" /> ARM64 | `osx-arm64` | Apple SSL | `PjSip.Net.Native.MacOS` |
+| <img src="https://img.shields.io/badge/Android-3DDC84?logo=android&logoColor=white" alt="Android" /> ARM64 | `android-arm64` | OpenSSL | `PjSip.Net.Native.Android` |
+| <img src="https://img.shields.io/badge/iOS-000000?logo=ios&logoColor=white" alt="iOS" /> ARM64 | `ios-arm64` | Secure Transport | `PjSip.Net.Native.iOS` |
 
 ---
 
-## Build desde Código Fuente
+## 🛠️ Build desde Código Fuente
 
 ### Prerequisitos
 
@@ -1847,6 +1912,6 @@ dotnet pack src/PjSip.Net.Native.Win64/PjSip.Net.Native.Win64.csproj -o ./artifa
 
 ---
 
-## Licencia
+## 📄 Licencia
 
 MIT
