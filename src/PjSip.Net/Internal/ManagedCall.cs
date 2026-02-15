@@ -84,8 +84,9 @@ internal sealed class ManagedCall : ISipCall
                 };
                 State = MapCallState(ci.state);
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogWarning(ex, "Failed to read native call info for incoming call, using defaults");
                 Id = Guid.NewGuid().ToString("N")[..8];
                 Info = new SipCallInfo
                 {
@@ -135,7 +136,11 @@ internal sealed class ManagedCall : ISipCall
     {
         if (_native is null) return null;
         try { return _native.getStreamStat(mediaIndex); }
-        catch { return null; }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Failed to get stream stats for call {CallId} media index {Index}", Id, mediaIndex);
+            return null;
+        }
     }
 
     public event EventHandler<CallStateChangedEventArgs>? StateChanged;
@@ -306,9 +311,18 @@ internal sealed class ManagedCall : ISipCall
         }
     }
 
+    private static readonly HashSet<char> ValidDtmfChars = ['0','1','2','3','4','5','6','7','8','9','*','#','A','B','C','D'];
+
     public void SendDtmf(string digits)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentException.ThrowIfNullOrEmpty(digits);
+        foreach (var c in digits)
+        {
+            if (!ValidDtmfChars.Contains(c))
+                throw new ArgumentException($"Invalid DTMF digit: '{c}'. Allowed: 0-9, *, #, A-D.", nameof(digits));
+        }
+
         _logger.LogDebug("Sending DTMF {Digits} on call {CallId}", digits, Id);
 
         if (_native is not null)
@@ -476,7 +490,11 @@ internal sealed class ManagedCall : ISipCall
 
         if (State is not SipCallState.Disconnected and not SipCallState.Null)
         {
-            try { Hangup(); } catch { /* best effort */ }
+            try { Hangup(); }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Best-effort hangup during dispose of call {CallId}", Id);
+            }
         }
 
         _native?.Dispose();

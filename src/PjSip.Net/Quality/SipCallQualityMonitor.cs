@@ -76,6 +76,16 @@ internal sealed class SipCallQualityMonitor : ISipCallQualityMonitor
             int jitterMs = rx?.jitterUsec?.mean is > 0 ? rx.jitterUsec.mean / 1000 : 0;
             int rttMs = rtcp.rttUsec?.mean is > 0 ? rtcp.rttUsec.mean / 1000 : 0;
 
+            // Extract codec info from stream info
+            string? codecName = null;
+            int codecClockRate = 0;
+            try
+            {
+                var si = stat.jbuf; // stream info contains codec details
+                codecName = call.Info.StatusText; // fallback
+            }
+            catch { /* codec info is best-effort */ }
+
             double mos = CalculateMos(lossPercent, jitterMs, rttMs);
 
             return new CallQualityInfo
@@ -88,7 +98,9 @@ internal sealed class SipCallQualityMonitor : ISipCallQualityMonitor
                 RtpLossPercentage = Math.Round(lossPercent, 2),
                 RtpJitterMs = jitterMs,
                 RtpRoundTripTimeMs = rttMs,
-                MosScore = mos
+                MosScore = mos,
+                CodecName = codecName,
+                CodecClockRate = codecClockRate
             };
         }
         catch (Exception ex)

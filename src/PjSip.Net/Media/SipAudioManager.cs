@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using PjSip.Net.Internal;
 
 namespace PjSip.Net.Media;
@@ -5,6 +6,10 @@ namespace PjSip.Net.Media;
 internal sealed class SipAudioManager : ISipAudioManager
 {
     private readonly PjSipEndpointManager _endpointManager;
+    private IReadOnlyList<AudioDeviceInfo>? _cachedInputDevices;
+    private IReadOnlyList<AudioDeviceInfo>? _cachedOutputDevices;
+    private float _inputLevel = 1.0f;
+    private float _outputLevel = 1.0f;
 
     public SipAudioManager(PjSipEndpointManager endpointManager)
     {
@@ -13,63 +18,48 @@ internal sealed class SipAudioManager : ISipAudioManager
 
     public AudioDeviceInfo? CurrentInputDevice { get; private set; }
     public AudioDeviceInfo? CurrentOutputDevice { get; private set; }
-    public float InputLevel { get; set; } = 1.0f;
-    public float OutputLevel { get; set; } = 1.0f;
+
+    public float InputLevel
+    {
+        get => _inputLevel;
+        set
+        {
+            _inputLevel = Math.Clamp(value, 0f, 1.0f);
+            ApplyInputLevel(_inputLevel);
+        }
+    }
+
+    public float OutputLevel
+    {
+        get => _outputLevel;
+        set
+        {
+            _outputLevel = Math.Clamp(value, 0f, 1.0f);
+            ApplyOutputLevel(_outputLevel);
+        }
+    }
 
     public IReadOnlyList<AudioDeviceInfo> GetInputDevices()
     {
-        var ep = _endpointManager.Endpoint;
-        if (ep is null) return [];
-
-        var devices = new List<AudioDeviceInfo>();
-        var audMgr = ep.audDevManager();
-        var devList = audMgr.enumDev2();
-
-        for (int i = 0; i < devList.Count; i++)
-        {
-            var dev = devList[i];
-            if (dev.inputCount > 0)
-            {
-                devices.Add(new AudioDeviceInfo
-                {
-                    DeviceId = i,
-                    Name = dev.name,
-                    InputChannels = (int)dev.inputCount,
-                    OutputChannels = (int)dev.outputCount,
-                    Driver = dev.driver
-                });
-            }
-        }
-
-        return devices;
+        if (_cachedInputDevices is not null) return _cachedInputDevices;
+        _cachedInputDevices = EnumerateDevices(input: true);
+        return _cachedInputDevices;
     }
 
     public IReadOnlyList<AudioDeviceInfo> GetOutputDevices()
     {
-        var ep = _endpointManager.Endpoint;
-        if (ep is null) return [];
+        if (_cachedOutputDevices is not null) return _cachedOutputDevices;
+        _cachedOutputDevices = EnumerateDevices(input: false);
+        return _cachedOutputDevices;
+    }
 
-        var devices = new List<AudioDeviceInfo>();
-        var audMgr = ep.audDevManager();
-        var devList = audMgr.enumDev2();
-
-        for (int i = 0; i < devList.Count; i++)
-        {
-            var dev = devList[i];
-            if (dev.outputCount > 0)
-            {
-                devices.Add(new AudioDeviceInfo
-                {
-                    DeviceId = i,
-                    Name = dev.name,
-                    InputChannels = (int)dev.inputCount,
-                    OutputChannels = (int)dev.outputCount,
-                    Driver = dev.driver
-                });
-            }
-        }
-
-        return devices;
+    /// <summary>
+    /// Invalidates the cached device lists so the next call re-enumerates.
+    /// </summary>
+    public void RefreshDevices()
+    {
+        _cachedInputDevices = null;
+        _cachedOutputDevices = null;
     }
 
     public void SetInputDevice(int deviceId)
@@ -113,6 +103,67 @@ internal sealed class SipAudioManager : ISipAudioManager
         else
         {
             CurrentOutputDevice = new AudioDeviceInfo { DeviceId = deviceId, Name = $"Device {deviceId}" };
+        }
+    }
+
+    private IReadOnlyList<AudioDeviceInfo> EnumerateDevices(bool input)
+    {
+        var ep = _endpointManager.Endpoint;
+        if (ep is null) return [];
+
+        var devices = new List<AudioDeviceInfo>();
+        var audMgr = ep.audDevManager();
+        var devList = audMgr.enumDev2();
+
+        for (int i = 0; i < devList.Count; i++)
+        {
+            var dev = devList[i];
+            bool matches = input ? dev.inputCount > 0 : dev.outputCount > 0;
+            if (matches)
+            {
+                devices.Add(new AudioDeviceInfo
+                {
+                    DeviceId = i,
+                    Name = dev.name,
+                    InputChannels = (int)dev.inputCount,
+                    OutputChannels = (int)dev.outputCount,
+                    Driver = dev.driver
+                });
+            }
+        }
+
+        return devices;
+    }
+
+    private void ApplyInputLevel(float level)
+    {
+        var ep = _endpointManager.Endpoint;
+        if (ep is null) return;
+
+        try
+        {
+            var capMedia = ep.audDevManager().getCaptureDevMedia();
+            capMedia.adjustRxLevel(level);
+        }
+        catch
+        {
+            // No active media or endpoint not ready
+        }
+    }
+
+    private void ApplyOutputLevel(float level)
+    {
+        var ep = _endpointManager.Endpoint;
+        if (ep is null) return;
+
+        try
+        {
+            var playMedia = ep.audDevManager().getPlaybackDevMedia();
+            playMedia.adjustRxLevel(level);
+        }
+        catch
+        {
+            // No active media or endpoint not ready
         }
     }
 }

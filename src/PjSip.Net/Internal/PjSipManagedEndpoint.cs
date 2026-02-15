@@ -32,7 +32,7 @@ internal sealed class PjSipManagedEndpoint : Endpoint
 
             TransportStateChanged?.Invoke(this, new TransportStateChangedEventArgs
             {
-                TransportType = SipTransportType.Udp, // best-effort mapping
+                TransportType = ParseTransportType(prm.type),
                 State = prm.state.ToString(),
                 LastError = prm.lastError != 0 ? $"Error {prm.lastError}" : null
             });
@@ -68,6 +68,21 @@ internal sealed class PjSipManagedEndpoint : Endpoint
             _logger.LogError(ex, "Error handling onNatDetectionComplete callback");
         }
     }
+
+    /// <summary>
+    /// Parses the transport type string from pjsua2 (e.g. "UDP", "TCP", "TLS") to SipTransportType.
+    /// </summary>
+    private static SipTransportType ParseTransportType(string? type) =>
+        (type?.ToUpperInvariant()) switch
+        {
+            "UDP" => SipTransportType.Udp,
+            "TCP" => SipTransportType.Tcp,
+            "TLS" => SipTransportType.Tls,
+            "UDP6" => SipTransportType.Udp6,
+            "TCP6" => SipTransportType.Tcp6,
+            "TLS6" => SipTransportType.Tls6,
+            _ => SipTransportType.Udp
+        };
 
     public override void onMediaEvent(OnMediaEventParam prm)
     {

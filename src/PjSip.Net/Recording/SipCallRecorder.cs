@@ -9,9 +9,11 @@ internal sealed class SipCallRecorder : ISipCallRecorder
 {
     private readonly PjSipEndpointManager _endpointManager;
     private readonly ILogger _logger;
+    private readonly Lock _lock = new();
     private volatile bool _disposed;
     private ISipCall? _recordingCall;
     private AudioMediaRecorder? _recorder;
+    private volatile bool _isRecording;
 
     public SipCallRecorder(
         PjSipEndpointManager endpointManager,
@@ -21,7 +23,7 @@ internal sealed class SipCallRecorder : ISipCallRecorder
         _logger = logger;
     }
 
-    public bool IsRecording { get; private set; }
+    public bool IsRecording => _isRecording;
     public string? CurrentFilePath { get; private set; }
 
     public event EventHandler<RecordingStateChangedEventArgs>? RecordingStateChanged;
@@ -29,70 +31,91 @@ internal sealed class SipCallRecorder : ISipCallRecorder
     public void StartRecording(ISipCall call, string filePath, RecordingFormat format = RecordingFormat.Wav)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        if (IsRecording) throw new InvalidOperationException("Already recording.");
 
-        _recordingCall = call;
-        CurrentFilePath = filePath;
-        IsRecording = true;
-
-        _logger.LogInformation("Started recording call {CallId} to {FilePath}", call.Id, filePath);
-
-        if (call is ManagedCall managed && managed.AudioMedia is not null)
+        lock (_lock)
         {
-            _endpointManager.Invoker.Invoke(() =>
+            if (_isRecording) throw new InvalidOperationException("Already recording.");
+
+            _recordingCall = call;
+            CurrentFilePath = filePath;
+
+            if (call is ManagedCall managed && managed.AudioMedia is not null)
             {
-                try
+                _endpointManager.Invoker.Invoke(() =>
                 {
-                    _recorder = new AudioMediaRecorder();
-                    _recorder.createRecorder(filePath);
-                    managed.AudioMedia.startTransmit(_recorder);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error starting native recording for call {CallId}", call.Id);
-                    _recorder?.Dispose();
-                    _recorder = null;
-                }
-            });
+                    try
+                    {
+                        _recorder = new AudioMediaRecorder();
+                        _recorder.createRecorder(filePath);
+                        managed.AudioMedia.startTransmit(_recorder);
+                        _isRecording = true;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Error starting native recording for call {CallId}", call.Id);
+                        _recorder?.Dispose();
+                        _recorder = null;
+                        _recordingCall = null;
+                        CurrentFilePath = null;
+                        return;
+                    }
+                });
+            }
+            else
+            {
+                _isRecording = true;
+            }
         }
 
-        RecordingStateChanged?.Invoke(this, new RecordingStateChangedEventArgs
+        if (_isRecording)
         {
-            Call = call,
-            IsRecording = true,
-            FilePath = filePath
-        });
+            _logger.LogInformation("Started recording call {CallId} to {FilePath}", call.Id, filePath);
+            RecordingStateChanged?.Invoke(this, new RecordingStateChangedEventArgs
+            {
+                Call = call,
+                IsRecording = true,
+                FilePath = filePath
+            });
+        }
     }
 
     public void StopRecording()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        if (!IsRecording) return;
 
-        _logger.LogInformation("Stopped recording call {CallId}", _recordingCall?.Id);
+        ISipCall? call;
+        string? filePath;
 
-        if (_recorder is not null && _recordingCall is ManagedCall managed && managed.AudioMedia is not null)
+        lock (_lock)
         {
-            _endpointManager.Invoker.Invoke(() =>
+            if (!_isRecording) return;
+
+            call = _recordingCall;
+            filePath = CurrentFilePath;
+
+            if (_recorder is not null && _recordingCall is ManagedCall managed && managed.AudioMedia is not null)
             {
-                try
+                _endpointManager.Invoker.Invoke(() =>
                 {
-                    managed.AudioMedia.stopTransmit(_recorder);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Error stopping native recording");
-                }
-                _recorder.Dispose();
-                _recorder = null;
-            });
+                    try
+                    {
+                        managed.AudioMedia.stopTransmit(_recorder);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Error stopping native recording");
+                    }
+                    _recorder.Dispose();
+                    _recorder = null;
+                });
+            }
+
+            _isRecording = false;
+            CurrentFilePath = null;
+            _recordingCall = null;
         }
 
-        var call = _recordingCall;
-        var filePath = CurrentFilePath;
-        IsRecording = false;
-        CurrentFilePath = null;
-        _recordingCall = null;
+        _logger.LogInformation("Stopped recording call {CallId}", call?.Id);
 
         if (call is not null)
         {
@@ -109,6 +132,6 @@ internal sealed class SipCallRecorder : ISipCallRecorder
     {
         if (_disposed) return;
         _disposed = true;
-        if (IsRecording) StopRecording();
+        if (_isRecording) StopRecording();
     }
 }

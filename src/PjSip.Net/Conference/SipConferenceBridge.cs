@@ -162,7 +162,7 @@ internal sealed class SipConferenceBridge : ISipConferenceBridge
                 }
             }
 
-            // Reconnect each call to default sound device
+            // Reconnect each call to default sound devices (playback + capture)
             var ep = _endpointManager.Endpoint;
             if (ep is not null)
             {
@@ -170,8 +170,11 @@ internal sealed class SipConferenceBridge : ISipConferenceBridge
                 {
                     try
                     {
-                        var playMedia = ep.audDevManager().getPlaybackDevMedia();
+                        var audMgr = ep.audDevManager();
+                        var playMedia = audMgr.getPlaybackDevMedia();
+                        var capMedia = audMgr.getCaptureDevMedia();
                         mc.AudioMedia!.startTransmit(playMedia);
+                        capMedia.startTransmit(mc.AudioMedia!);
                     }
                     catch (Exception ex)
                     {

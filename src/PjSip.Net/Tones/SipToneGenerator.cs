@@ -37,6 +37,10 @@ internal sealed class SipToneGenerator : ISipToneGenerator
     public void PlayTones(IEnumerable<ToneDescriptor> tones)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+
+        // Stop any currently playing tone first
+        if (IsPlaying) Stop();
+
         IsPlaying = true;
 
         var ep = _endpointManager.Endpoint;
@@ -46,7 +50,7 @@ internal sealed class SipToneGenerator : ISipToneGenerator
         {
             try
             {
-                // Clean up previous tone generator
+                // Clean up previous tone generator (defensive)
                 _toneGen?.Dispose();
 
                 _toneGen = new ToneGenerator();

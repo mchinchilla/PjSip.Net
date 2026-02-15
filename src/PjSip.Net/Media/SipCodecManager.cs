@@ -18,12 +18,8 @@ internal sealed class SipCodecManager : ISipCodecManager
 
     public IReadOnlyList<CodecInfo> GetCodecs()
     {
-        var ep = _endpointManager.Endpoint;
-        if (ep is null)
-        {
-            _logger.LogDebug("Getting codec list (no native endpoint)");
-            return [];
-        }
+        var ep = _endpointManager.Endpoint
+            ?? throw new InvalidOperationException("Cannot enumerate codecs: SIP endpoint is not initialized. Call StartAsync() first.");
 
         var codecList = ep.codecEnum2();
         var result = new List<CodecInfo>(codecList.Count);
@@ -44,10 +40,13 @@ internal sealed class SipCodecManager : ISipCodecManager
 
     public void SetCodecPriority(string codecId, int priority)
     {
-        _logger.LogInformation("Setting codec {CodecId} priority to {Priority}", codecId, priority);
+        ArgumentException.ThrowIfNullOrWhiteSpace(codecId);
 
-        var ep = _endpointManager.Endpoint;
-        ep?.codecSetPriority(codecId, (byte)Math.Clamp(priority, 0, 255));
+        var ep = _endpointManager.Endpoint
+            ?? throw new InvalidOperationException("Cannot set codec priority: SIP endpoint is not initialized. Call StartAsync() first.");
+
+        _logger.LogInformation("Setting codec {CodecId} priority to {Priority}", codecId, priority);
+        ep.codecSetPriority(codecId, (byte)Math.Clamp(priority, 0, 255));
     }
 
     public void DisableCodec(string codecId) => SetCodecPriority(codecId, 0);

@@ -15,7 +15,8 @@ internal sealed class SipPresenceManager : ISipPresenceManager
     private readonly ILogger _logger;
     private readonly List<ManagedBuddy> _buddies = [];
     private readonly object _lock = new();
-    private ManagedAccount? _account;
+    private readonly List<ManagedAccount> _accounts = [];
+    private ManagedAccount? _primaryAccount;
 
     public SipPresenceManager(
         PjSipEndpointManager endpointManager,
@@ -35,15 +36,29 @@ internal sealed class SipPresenceManager : ISipPresenceManager
     public event EventHandler<BuddyStateChangedEventArgs>? BuddyStateChanged;
 
     /// <summary>
-    /// Sets the account to use for presence operations.
+    /// Adds an account for presence operations. The first account added is the primary.
     /// </summary>
-    internal void SetAccount(ManagedAccount account) => _account = account;
+    internal void AddAccount(ManagedAccount account)
+    {
+        lock (_lock) _accounts.Add(account);
+        _primaryAccount ??= account;
+    }
+
+    /// <summary>
+    /// Removes an account from presence operations.
+    /// </summary>
+    internal void RemoveAccount(ManagedAccount account)
+    {
+        lock (_lock) _accounts.Remove(account);
+        if (_primaryAccount == account)
+            _primaryAccount = _accounts.FirstOrDefault();
+    }
 
     public ISipBuddy AddBuddy(string uri)
     {
         var buddy = new ManagedBuddy(uri, _endpointManager, _logger);
-        if (_account is not null)
-            buddy.SetAccount(_account);
+        if (_primaryAccount is not null)
+            buddy.SetAccount(_primaryAccount);
 
         lock (_lock) _buddies.Add(buddy);
         buddy.StateChanged += OnBuddyStateChanged;
@@ -71,7 +86,10 @@ internal sealed class SipPresenceManager : ISipPresenceManager
     {
         MyState = state;
 
-        if (_account?.Native is null)
+        ManagedAccount[] accounts;
+        lock (_lock) accounts = [.. _accounts];
+
+        if (accounts.Length == 0 || accounts.All(a => a.Native is null))
         {
             _logger.LogInformation("Setting my presence to {State} ({StatusText}) (stub mode)", state, statusText);
             return;
@@ -99,7 +117,12 @@ internal sealed class SipPresenceManager : ISipPresenceManager
             if (statusText is not null)
                 presStatus.statusText = statusText;
 
-            _account.Native!.setOnlineStatus(presStatus);
+            // Apply presence to all accounts
+            foreach (var account in accounts)
+            {
+                try { account.Native?.setOnlineStatus(presStatus); }
+                catch (Exception ex) { _logger.LogWarning(ex, "Error setting presence on account {Uri}", account.Uri); }
+            }
         });
     }
 

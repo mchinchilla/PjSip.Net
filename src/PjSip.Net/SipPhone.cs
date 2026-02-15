@@ -105,6 +105,8 @@ internal sealed class SipPhone : ISipPhone
                 }
             }
 
+            _networkMonitor.StartMonitoring();
+
             State = SipPhoneState.Running;
             _logger.LogInformation("SipPhone started with {AccountCount} account(s)", _accounts.Count);
         }
@@ -125,10 +127,18 @@ internal sealed class SipPhone : ISipPhone
 
         try
         {
+            // Dispose sub-managers that hold native resources
             _callRecorder.Dispose();
             _toneGenerator.Dispose();
             _networkMonitor.Dispose();
 
+            // Dispose all buddies via presence manager
+            foreach (var buddy in _presenceManager.Buddies.ToArray())
+            {
+                _presenceManager.RemoveBuddy(buddy);
+            }
+
+            // Dispose all accounts (and their active calls)
             lock (_lock)
             {
                 foreach (var account in _accounts)
@@ -167,6 +177,7 @@ internal sealed class SipPhone : ISipPhone
                 sipAccount.RegistrationStateChanged -= OnAccountRegistrationStateChanged;
                 sipAccount.IncomingCall -= OnAccountIncomingCall;
                 sipAccount.MwiStateChanged -= OnAccountMwiStateChanged;
+                _presenceManager.RemoveAccount(sipAccount.Inner);
                 sipAccount.Dispose();
             }
         }
@@ -201,9 +212,8 @@ internal sealed class SipPhone : ISipPhone
         account.IncomingCall += OnAccountIncomingCall;
         account.MwiStateChanged += OnAccountMwiStateChanged;
 
-        // Wire presence manager to first account
-        if (_accounts.Count == 0)
-            _presenceManager.SetAccount(managed);
+        // Wire presence manager to this account
+        _presenceManager.AddAccount(managed);
 
         lock (_lock) _accounts.Add(account);
         return account;

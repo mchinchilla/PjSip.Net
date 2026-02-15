@@ -1,3 +1,4 @@
+using System.Net.NetworkInformation;
 using Microsoft.Extensions.Logging;
 using PjSip.Net.Internal;
 using PjSip.Net.Interop.Generated;
@@ -8,6 +9,7 @@ internal sealed class SipNetworkMonitor : ISipNetworkMonitor
 {
     private readonly PjSipEndpointManager _endpointManager;
     private readonly ILogger _logger;
+    private volatile bool _monitoring;
     private volatile bool _disposed;
 
     public SipNetworkMonitor(
@@ -21,6 +23,17 @@ internal sealed class SipNetworkMonitor : ISipNetworkMonitor
     public NetworkState CurrentState { get; private set; } = NetworkState.Connected;
 
     public event EventHandler<NetworkStateChangedEventArgs>? NetworkStateChanged;
+
+    internal void StartMonitoring()
+    {
+        if (_monitoring) return;
+        _monitoring = true;
+
+        NetworkChange.NetworkAvailabilityChanged += OnNetworkAvailabilityChanged;
+        NetworkChange.NetworkAddressChanged += OnNetworkAddressChanged;
+
+        _logger.LogInformation("Network monitoring started");
+    }
 
     public async Task HandleNetworkChangeAsync(CancellationToken ct = default)
     {
@@ -65,9 +78,37 @@ internal sealed class SipNetworkMonitor : ISipNetworkMonitor
         });
     }
 
+    private void OnNetworkAvailabilityChanged(object? sender, NetworkAvailabilityEventArgs e)
+    {
+        if (_disposed) return;
+
+        if (e.IsAvailable)
+        {
+            _logger.LogInformation("Network became available, triggering IP change handling");
+            _ = HandleNetworkChangeAsync();
+        }
+        else
+        {
+            _logger.LogWarning("Network became unavailable");
+            OnNetworkDisconnected();
+        }
+    }
+
+    private void OnNetworkAddressChanged(object? sender, EventArgs e)
+    {
+        if (_disposed) return;
+
+        _logger.LogInformation("Network address changed, triggering IP change handling");
+        _ = HandleNetworkChangeAsync();
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
+        _monitoring = false;
+
+        NetworkChange.NetworkAvailabilityChanged -= OnNetworkAvailabilityChanged;
+        NetworkChange.NetworkAddressChanged -= OnNetworkAddressChanged;
     }
 }

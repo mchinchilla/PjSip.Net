@@ -4,7 +4,7 @@ namespace PjSip.Net.History;
 
 internal sealed class SipCallHistory : ISipCallHistory
 {
-    private readonly List<CallHistoryEntry> _entries = [];
+    private readonly LinkedList<CallHistoryEntry> _entries = new();
     private readonly object _lock = new();
     private readonly int _maxEntries;
 
@@ -15,7 +15,7 @@ internal sealed class SipCallHistory : ISipCallHistory
 
     public IReadOnlyList<CallHistoryEntry> Entries
     {
-        get { lock (_lock) return _entries.ToArray(); }
+        get { lock (_lock) return [.. _entries]; }
     }
 
     public event EventHandler<CallHistoryEntry>? EntryAdded;
@@ -50,10 +50,10 @@ internal sealed class SipCallHistory : ISipCallHistory
     {
         lock (_lock)
         {
-            _entries.Add(entry);
-            if (_entries.Count > _maxEntries)
+            _entries.AddLast(entry);
+            while (_entries.Count > _maxEntries)
             {
-                _entries.RemoveAt(0);
+                _entries.RemoveFirst(); // O(1) removal from head
             }
         }
         EntryAdded?.Invoke(this, entry);

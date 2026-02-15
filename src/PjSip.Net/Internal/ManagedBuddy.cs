@@ -153,9 +153,21 @@ internal sealed class ManagedBuddy : ISipBuddy
         if (_disposed) return;
         _disposed = true;
 
-        if (State is not BuddyState.Offline and not BuddyState.Unknown)
+        if (_native is not null && State is not BuddyState.Offline and not BuddyState.Unknown)
         {
-            try { UnsubscribeAsync().GetAwaiter().GetResult(); } catch { /* best effort */ }
+            // Unsubscribe synchronously on the PJSIP thread to avoid deadlock
+            try
+            {
+                _endpointManager.Invoker.Invoke(() =>
+                {
+                    try { _native.subscribePresence(false); }
+                    catch (Exception ex) { _logger.LogDebug(ex, "Best-effort unsubscribe during dispose of buddy {Uri}", Uri); }
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Error during buddy dispose for {Uri}", Uri);
+            }
         }
 
         _native?.Dispose();

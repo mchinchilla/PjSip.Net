@@ -29,6 +29,14 @@ internal sealed class ManagedAccount : ISipAccount
         PjSipEndpointManager endpointManager,
         ILogger logger)
     {
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentException.ThrowIfNullOrWhiteSpace(options.Username, nameof(options.Username));
+        ArgumentException.ThrowIfNullOrWhiteSpace(options.Password, nameof(options.Password));
+        ArgumentException.ThrowIfNullOrWhiteSpace(options.Domain, nameof(options.Domain));
+
+        if (options.RegistrationTimeout <= 0)
+            throw new ArgumentOutOfRangeException(nameof(options.RegistrationTimeout), "Registration timeout must be positive.");
+
         Options = options;
         _endpointManager = endpointManager;
         _logger = logger;
@@ -373,12 +381,48 @@ internal sealed class ManagedAccount : ISipAccount
         {
             try
             {
-                // Parse MWI body from rdata if available
                 _logger.LogDebug("MWI info received for {Uri}", _managed.Uri);
+
+                // Parse Messages-Waiting body from SIP NOTIFY (RFC 3842)
+                // Format: Messages-Waiting: yes/no\r\nVoice-Message: new/old (new-urgent/old-urgent)
+                var body = prm.rdata?.wholeMsg ?? string.Empty;
+                bool hasWaiting = body.Contains("Messages-Waiting: yes", StringComparison.OrdinalIgnoreCase);
+                int newMsgs = 0, oldMsgs = 0, newUrgent = 0, oldUrgent = 0;
+
+                foreach (var line in body.Split('\n'))
+                {
+                    var trimmed = line.Trim();
+                    if (trimmed.StartsWith("Voice-Message:", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Voice-Message: 2/8 (1/2)
+                        var value = trimmed["Voice-Message:".Length..].Trim();
+                        var parts = value.Split('(');
+                        var mainParts = parts[0].Trim().Split('/');
+                        if (mainParts.Length >= 2)
+                        {
+                            int.TryParse(mainParts[0].Trim(), out newMsgs);
+                            int.TryParse(mainParts[1].Trim(), out oldMsgs);
+                        }
+                        if (parts.Length >= 2)
+                        {
+                            var urgentParts = parts[1].TrimEnd(')').Trim().Split('/');
+                            if (urgentParts.Length >= 2)
+                            {
+                                int.TryParse(urgentParts[0].Trim(), out newUrgent);
+                                int.TryParse(urgentParts[1].Trim(), out oldUrgent);
+                            }
+                        }
+                    }
+                }
+
                 _managed.OnMwiInfo(new MwiInfo
                 {
                     AccountUri = _managed.Uri,
-                    HasWaiting = true
+                    HasWaiting = hasWaiting,
+                    NewMessages = newMsgs,
+                    OldMessages = oldMsgs,
+                    NewUrgentMessages = newUrgent,
+                    OldUrgentMessages = oldUrgent
                 });
             }
             catch (Exception ex)
