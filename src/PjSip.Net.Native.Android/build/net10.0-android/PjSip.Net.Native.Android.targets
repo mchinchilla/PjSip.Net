@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <!--
+    PjSip.Net.Native.Android — includes the native libpjsua2.so for
+    android-arm64 so that it is bundled into the APK/AAB as a native library.
+  -->
+  <ItemGroup Condition="'$(TargetFramework)' != '' And $([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net10.0-android'))">
+    <None Include="$(MSBuildThisFileDirectory)..\..\runtimes\android-arm64\native\libpjsua2.so"
+          Condition="Exists('$(MSBuildThisFileDirectory)..\..\runtimes\android-arm64\native\libpjsua2.so')"
+          Link="runtimes\android-arm64\native\libpjsua2.so"
+          CopyToOutputDirectory="PreserveNewest"
+          Visible="false" />
+  </ItemGroup>
+
+</Project>

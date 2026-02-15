@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="PjSip.Net.Sample.Maui.MainPage"
+             Title="PjSip.Net MAUI Sample">
+    <VerticalStackLayout Padding="20" Spacing="10">
+        <Label x:Name="StatusLabel" Text="Status: Idle" FontSize="18"/>
+        <Button Text="Start Phone" Clicked="OnStartClicked"/>
+        <Entry x:Name="DestinationEntry" Placeholder="sip:bob@example.com"/>
+        <Button Text="Make Call" Clicked="OnCallClicked"/>
+        <Button Text="Hang Up" Clicked="OnHangupClicked"/>
+        <Button Text="Stop Phone" Clicked="OnStopClicked"/>
+    </VerticalStackLayout>
+</ContentPage>

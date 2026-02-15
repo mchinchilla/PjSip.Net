@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <PackageId>PjSip.Net.Native.Win64</PackageId>
+    <Description>Native PJSIP pjsua2 binaries for Windows x64 with Schannel TLS</Description>
+    <PackageTags>pjsip;native;windows;x64;schannel</PackageTags>
+    <!-- This is a content-only package -->
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <NoDefaultExcludes>true</NoDefaultExcludes>
+    <ProduceReferenceAssembly>false</ProduceReferenceAssembly>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="runtimes\win-x64\native\**" PackagePath="runtimes/win-x64/native" />
+    <None Include="build\**" Pack="true" PackagePath="build" />
+    <None Include="buildTransitive\**" Pack="true" PackagePath="buildTransitive" />
+  </ItemGroup>
+
+</Project>

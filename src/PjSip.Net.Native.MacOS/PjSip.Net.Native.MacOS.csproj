@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <PackageId>PjSip.Net.Native.MacOS</PackageId>
+    <Description>Native PJSIP pjsua2 binaries for macOS (x64 and arm64)</Description>
+    <PackageTags>pjsip;native;macos;osx;arm64;x64</PackageTags>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <ProduceReferenceAssembly>false</ProduceReferenceAssembly>
+    <NoDefaultExcludes>true</NoDefaultExcludes>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="runtimes\osx-x64\native\**" PackagePath="runtimes/osx-x64/native" />
+    <Content Include="runtimes\osx-arm64\native\**" PackagePath="runtimes/osx-arm64/native" />
+    <None Include="build\**" Pack="true" PackagePath="build" />
+    <None Include="buildTransitive\**" Pack="true" PackagePath="buildTransitive" />
+  </ItemGroup>
+
+</Project>

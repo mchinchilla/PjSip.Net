@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <!--
+    PjSip.Net.Native.iOS — includes the native libpjsua2.dylib for
+    ios-arm64 so that it is bundled into the iOS application.
+    (Transitive — applies to projects that indirectly reference this package.)
+  -->
+  <ItemGroup Condition="'$(TargetFramework)' != '' And $([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net10.0-ios'))">
+    <None Include="$(MSBuildThisFileDirectory)..\..\runtimes\ios-arm64\native\libpjsua2.dylib"
+          Condition="Exists('$(MSBuildThisFileDirectory)..\..\runtimes\ios-arm64\native\libpjsua2.dylib')"
+          Link="runtimes\ios-arm64\native\libpjsua2.dylib"
+          CopyToOutputDirectory="PreserveNewest"
+          Visible="false" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,28 @@
+<Solution>
+  <!-- Source Libraries -->
+  <Folder Name="/src/">
+    <Project Path="src/PjSip.Net/PjSip.Net.csproj" />
+    <Project Path="src/PjSip.Net.Interop/PjSip.Net.Interop.csproj" />
+  </Folder>
+
+  <Folder Name="/src/native/">
+    <Project Path="src/PjSip.Net.Native.Win64/PjSip.Net.Native.Win64.csproj" />
+    <Project Path="src/PjSip.Net.Native.MacOS/PjSip.Net.Native.MacOS.csproj" />
+    <Project Path="src/PjSip.Net.Native.Android/PjSip.Net.Native.Android.csproj" />
+    <Project Path="src/PjSip.Net.Native.iOS/PjSip.Net.Native.iOS.csproj" />
+  </Folder>
+
+  <!-- Tests -->
+  <Folder Name="/tests/">
+    <Project Path="tests/PjSip.Net.Tests.Unit/PjSip.Net.Tests.Unit.csproj" />
+    <Project Path="tests/PjSip.Net.Tests.Integration/PjSip.Net.Tests.Integration.csproj" />
+  </Folder>
+
+  <!-- Samples -->
+  <Folder Name="/samples/">
+    <Project Path="samples/PjSip.Net.Sample.Console/PjSip.Net.Sample.Console.csproj" />
+    <Project Path="samples/PjSip.Net.Sample.WinForms/PjSip.Net.Sample.WinForms.csproj" />
+    <Project Path="samples/PjSip.Net.Sample.Wpf/PjSip.Net.Sample.Wpf.csproj" />
+    <Project Path="samples/PjSip.Net.Sample.Maui/PjSip.Net.Sample.Maui.csproj" />
+  </Folder>
+</Solution>

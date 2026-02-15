@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <PackageId>PjSip.Net</PackageId>
+    <Description>High-level .NET SDK for PJSIP — SIP phone, accounts, calls, TLS, and DI support for WinForms, WPF, and MAUI</Description>
+    <PackageTags>pjsip;sip;voip;phone;tls;wpf;winforms;maui</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="PjSip.Net.Tests.Unit" />
+    <InternalsVisibleTo Include="PjSip.Net.Tests.Integration" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PjSip.Net.Interop\PjSip.Net.Interop.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+</Project>

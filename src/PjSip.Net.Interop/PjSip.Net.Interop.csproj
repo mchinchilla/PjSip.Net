@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <PackageId>PjSip.Net.Interop</PackageId>
+    <Description>Low-level SWIG-generated interop layer for PJSIP pjsua2 library</Description>
+    <PackageTags>pjsip;sip;voip;interop;pjsua2</PackageTags>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <NoWarn>$(NoWarn);CA2255</NoWarn>
+  </PropertyGroup>
+
+</Project>
