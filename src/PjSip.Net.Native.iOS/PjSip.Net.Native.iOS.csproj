@@ -5,12 +5,10 @@
     <Description>Native PJSIP pjsua2 binaries for iOS arm64</Description>
     <PackageTags>pjsip;native;ios;arm64</PackageTags>
     <IncludeBuildOutput>false</IncludeBuildOutput>
-    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <ProduceReferenceAssembly>false</ProduceReferenceAssembly>
     <NoDefaultExcludes>true</NoDefaultExcludes>
     <IncludeSymbols>false</IncludeSymbols>
-    <NoWarn>$(NoWarn);NU5128</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -20,6 +18,7 @@
 
   <ItemGroup>
     <Content Include="runtimes\ios-arm64\native\**" PackagePath="runtimes/ios-arm64/native" />
+    <None Include="lib\net10.0\_._" Pack="true" PackagePath="lib/net10.0" />
     <None Include="build\**" Pack="true" PackagePath="build" />
     <None Include="buildTransitive\**" Pack="true" PackagePath="buildTransitive" />
   </ItemGroup>

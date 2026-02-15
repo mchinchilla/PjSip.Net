@@ -119,8 +119,7 @@ jobs:
           foreach ($project in $projects) {
             dotnet pack $project --no-build -c ${{ env.CONFIGURATION }} -o artifacts `
               -p:VersionPrefix=${{ steps.version.outputs.prefix }} `
-              -p:VersionSuffix=${{ steps.version.outputs.suffix }} `
-              -p:NoWarn=NU5128
+              -p:VersionSuffix=${{ steps.version.outputs.suffix }}
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
 

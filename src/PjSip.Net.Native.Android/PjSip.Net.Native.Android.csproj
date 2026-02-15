@@ -5,12 +5,10 @@
     <Description>Native PJSIP pjsua2 binaries for Android arm64</Description>
     <PackageTags>pjsip;native;android;arm64</PackageTags>
     <IncludeBuildOutput>false</IncludeBuildOutput>
-    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <ProduceReferenceAssembly>false</ProduceReferenceAssembly>
     <NoDefaultExcludes>true</NoDefaultExcludes>
     <IncludeSymbols>false</IncludeSymbols>
-    <NoWarn>$(NoWarn);NU5128</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -20,6 +18,7 @@
 
   <ItemGroup>
     <Content Include="runtimes\android-arm64\native\**" PackagePath="runtimes/android-arm64/native" />
+    <None Include="lib\net10.0\_._" Pack="true" PackagePath="lib/net10.0" />
     <None Include="build\**" Pack="true" PackagePath="build" />
     <None Include="buildTransitive\**" Pack="true" PackagePath="buildTransitive" />
   </ItemGroup>
