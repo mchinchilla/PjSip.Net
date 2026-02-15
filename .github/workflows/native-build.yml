@@ -22,17 +22,22 @@ jobs:
       - name: Copy config_site.h
         run: copy native\config_site.h pjproject\pjlib\include\pj\config_site.h
 
-      - name: Build BCG729
+      - name: Build BCG729 (static)
         shell: powershell
         run: |
           git clone --branch 1.1.1 --depth 1 https://github.com/BelledonneCommunications/bcg729.git bcg729
-          cmake -S bcg729 -B bcg729-build -G "Visual Studio 17 2022" -A x64 `
-              -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}\bcg729-install" `
-              -DCMAKE_POLICY_VERSION_MINIMUM=3.5 `
-              -DBUILD_SHARED_LIBS=OFF `
-              -DENABLE_TESTS=OFF
-          cmake --build bcg729-build --config Release
-          cmake --install bcg729-build --config Release
+          New-Item -ItemType Directory -Force -Path bcg729-install\include\bcg729 | Out-Null
+          New-Item -ItemType Directory -Force -Path bcg729-install\lib | Out-Null
+          # Copy public headers
+          Copy-Item bcg729\include\bcg729\*.h bcg729-install\include\bcg729\
+          # Create static export header (no dllimport/dllexport)
+          @('#ifndef BCG729_EXPORT_H','#define BCG729_EXPORT_H','#define BCG729_EXPORT','#define BCG729_NO_EXPORT','#endif') | Out-File -Encoding ascii bcg729-install\include\bcg729\bcg729_export.h
+          # Compile all BCG729 C sources into a true static .lib (cmake produces a DLL import lib)
+          $inc = "$env:GITHUB_WORKSPACE\bcg729-install\include"
+          $lib = "$env:GITHUB_WORKSPACE\bcg729-install\lib\bcg729.lib"
+          cmd /c "`"C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat`" x64 && cd bcg729\src && cl /nologo /MD /O2 /DNDEBUG /DBCG729_STATIC_DEFINE /I..\include /I`"$inc`" /c *.c && lib /nologo /OUT:`"$lib`" *.obj"
+          if ($LASTEXITCODE -ne 0) { throw "BCG729 build failed" }
+          Write-Host "BCG729 static lib built:" (Get-Item $lib).Length "bytes"
 
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
