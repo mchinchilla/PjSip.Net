@@ -10,6 +10,7 @@
     <ProduceReferenceAssembly>false</ProduceReferenceAssembly>
     <NoDefaultExcludes>true</NoDefaultExcludes>
     <IncludeSymbols>false</IncludeSymbols>
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -19,7 +20,6 @@
 
   <ItemGroup>
     <Content Include="runtimes\android-arm64\native\**" PackagePath="runtimes/android-arm64/native" />
-    <None Include="lib\net10.0-android35.0\_._" Pack="true" PackagePath="lib/net10.0-android35.0" />
     <None Include="build\**" Pack="true" PackagePath="build" />
     <None Include="buildTransitive\**" Pack="true" PackagePath="buildTransitive" />
   </ItemGroup>
