@@ -26,9 +26,13 @@ jobs:
         uses: microsoft/setup-msbuild@v2
 
       - name: Build pjproject (full solution)
-        shell: cmd
+        shell: powershell
         run: |
-          msbuild pjproject\pjproject-vs14.sln /p:Configuration=Release /p:Platform=x64 /m /v:minimal || echo "Build completed with some errors (sample link failures are expected)"
+          # Build full solution; samples may fail to link but libraries will be produced
+          & msbuild pjproject\pjproject-vs14.sln /p:Configuration=Release /p:Platform=x64 /m /v:minimal
+          Write-Host "MSBuild exit code: $LASTEXITCODE (non-zero is OK - samples link errors expected)"
+          # Don't fail the step — library .lib files are built before samples fail
+          exit 0
 
       - name: List built libraries
         shell: powershell
@@ -113,16 +117,23 @@ jobs:
       - name: Copy config_site.h
         run: cp native/config_site.h pjproject/pjlib/include/pj/config_site.h
 
-      - name: Configure and build pjproject
+      - name: Configure pjproject
         run: |
           cd pjproject
-          ./configure --host=arm-apple-darwin
+          ./configure
           make dep
-          # make may fail linking test binaries (missing framework refs) — .a libs are built first
-          make -k -j$(sysctl -n hw.logicalcpu) || true
-          # Verify static libraries were actually built
+
+      - name: Build pjproject libraries
+        run: |
+          cd pjproject
+          CPUS=$(sysctl -n hw.logicalcpu)
+          # Build each library module individually to continue past test binary link failures
+          for dir in pjlib pjlib-util pjnath third_party pjmedia pjsip; do
+            echo "=== Building $dir ==="
+            make -C "$dir/build" -j$CPUS || echo "WARNING: $dir build had errors (test binary link failures are OK)"
+          done
           echo "=== Built libraries ==="
-          find . -name "*.a" -path "*/lib/*" | head -20
+          find . -name "*.a" -path "*/lib/*"
           test -n "$(find . -name '*.a' -path '*/lib/*' -print -quit)" || { echo "ERROR: No .a libraries found"; exit 1; }
 
       - name: Run SWIG
@@ -190,14 +201,22 @@ jobs:
       - name: Copy config_site.h
         run: cp native/config_site.h pjproject/pjlib/include/pj/config_site.h
 
-      - name: Configure and build pjproject
+      - name: Configure pjproject
         run: |
           cd pjproject
           ./configure
           make dep
-          make -k -j$(sysctl -n hw.logicalcpu) || true
+
+      - name: Build pjproject libraries
+        run: |
+          cd pjproject
+          CPUS=$(sysctl -n hw.logicalcpu)
+          for dir in pjlib pjlib-util pjnath third_party pjmedia pjsip; do
+            echo "=== Building $dir ==="
+            make -C "$dir/build" -j$CPUS || echo "WARNING: $dir build had errors"
+          done
           echo "=== Built libraries ==="
-          find . -name "*.a" -path "*/lib/*" | head -20
+          find . -name "*.a" -path "*/lib/*"
           test -n "$(find . -name '*.a' -path '*/lib/*' -print -quit)" || { echo "ERROR: No .a libraries found"; exit 1; }
 
       - name: Run SWIG
@@ -271,7 +290,7 @@ jobs:
       - name: Copy config_site.h
         run: cp native/config_site.h pjproject/pjlib/include/pj/config_site.h
 
-      - name: Configure and build pjproject
+      - name: Configure pjproject
         env:
           ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
           TARGET_ABI: arm64-v8a
@@ -279,9 +298,20 @@ jobs:
           cd pjproject
           ./configure-android --use-ndk-cflags --disable-ssl
           make dep
-          make -k -j$(nproc) || true
+
+      - name: Build pjproject libraries
+        env:
+          ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
+          TARGET_ABI: arm64-v8a
+        run: |
+          cd pjproject
+          CPUS=$(nproc)
+          for dir in pjlib pjlib-util pjnath third_party pjmedia pjsip; do
+            echo "=== Building $dir ==="
+            make -C "$dir/build" -j$CPUS || echo "WARNING: $dir build had errors"
+          done
           echo "=== Built libraries ==="
-          find . -name "*.a" -path "*/lib/*" | head -20
+          find . -name "*.a" -path "*/lib/*"
           test -n "$(find . -name '*.a' -path '*/lib/*' -print -quit)" || { echo "ERROR: No .a libraries found"; exit 1; }
 
       - name: Run SWIG
@@ -355,20 +385,28 @@ jobs:
       - name: Copy config_site.h
         run: cp native/config_site.h pjproject/pjlib/include/pj/config_site.h
 
-      - name: Configure and build pjproject for iOS
+      - name: Configure pjproject for iOS
         run: |
           cd pjproject
           IOS_SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
-          export CFLAGS="-arch arm64 -isysroot $IOS_SDK -miphoneos-version-min=16.0 -fembed-bitcode"
+          export CFLAGS="-arch arm64 -isysroot $IOS_SDK -miphoneos-version-min=16.0"
           export CXXFLAGS="$CFLAGS"
           export LDFLAGS="-arch arm64 -isysroot $IOS_SDK -miphoneos-version-min=16.0"
           ./configure --host=aarch64-apple-darwin \
               --disable-sdl --disable-ffmpeg --disable-v4l2 \
               --disable-openh264 --disable-vpx --disable-libyuv
           make dep
-          make -k -j$(sysctl -n hw.logicalcpu) || true
+
+      - name: Build pjproject libraries for iOS
+        run: |
+          cd pjproject
+          CPUS=$(sysctl -n hw.logicalcpu)
+          for dir in pjlib pjlib-util pjnath third_party pjmedia pjsip; do
+            echo "=== Building $dir ==="
+            make -C "$dir/build" -j$CPUS || echo "WARNING: $dir build had errors"
+          done
           echo "=== Built libraries ==="
-          find . -name "*.a" -path "*/lib/*" | head -20
+          find . -name "*.a" -path "*/lib/*"
           test -n "$(find . -name '*.a' -path '*/lib/*' -print -quit)" || { echo "ERROR: No .a libraries found"; exit 1; }
 
       - name: Run SWIG
