@@ -25,43 +25,57 @@ jobs:
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
-      - name: Build pjproject
-        run: msbuild pjproject\pjproject-vs14.sln /p:Configuration="Release-Dynamic" /p:Platform=x64 /m /v:minimal
+      - name: Build pjproject static libs
+        shell: cmd
+        run: |
+          msbuild pjproject\pjproject-vs14.sln /p:Configuration=Release /p:Platform=x64 /m /v:minimal /t:pjlib;pjlib_util;pjnath;pjmedia;pjsip_core;pjsip_simple;pjsip_ua;pjsua_lib;pjsua2_lib || (
+            echo "Targeted build failed, trying full solution with continue-on-error..."
+            msbuild pjproject\pjproject-vs14.sln /p:Configuration=Release /p:Platform=x64 /m /v:minimal /p:ContinueOnError=true
+          )
 
       - name: Run SWIG
         shell: cmd
         run: |
           cd pjproject\pjsip-apps\src\swig\csharp
-          swig -I"..\..\..\..\..\pjproject\pjlib\include" ^
-               -I"..\..\..\..\..\pjproject\pjlib-util\include" ^
-               -I"..\..\..\..\..\pjproject\pjmedia\include" ^
-               -I"..\..\..\..\..\pjproject\pjsip\include" ^
-               -I"..\..\..\..\..\pjproject\pjnath\include" ^
+          swig -I"..\..\..\..\pjlib\include" ^
+               -I"..\..\..\..\pjlib-util\include" ^
+               -I"..\..\..\..\pjmedia\include" ^
+               -I"..\..\..\..\pjsip\include" ^
+               -I"..\..\..\..\pjnath\include" ^
                -w312 -c++ -csharp -dllimport pjsua2 ^
                -namespace PjSip.Net.Interop.Generated ^
                -o pjsua2_wrap.cpp ^
                "..\pjsua2.i"
 
-      - name: Build pjsua2.dll
+      - name: Compile SWIG wrapper object
         shell: cmd
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
           cd pjproject\pjsip-apps\src\swig\csharp
           cl /nologo /MD /EHsc /O2 /DNDEBUG /DPJ_DLL=1 /DPJ_EXPORTING=1 ^
-             /I"..\..\..\..\..\pjproject\pjlib\include" ^
-             /I"..\..\..\..\..\pjproject\pjlib-util\include" ^
-             /I"..\..\..\..\..\pjproject\pjmedia\include" ^
-             /I"..\..\..\..\..\pjproject\pjsip\include" ^
-             /I"..\..\..\..\..\pjproject\pjnath\include" ^
-             /LD pjsua2_wrap.cpp /Fe:pjsua2.dll ^
-             /link /LIBPATH:"..\..\..\..\..\pjproject\lib" ^
-             ws2_32.lib Iphlpapi.lib dsound.lib dxguid.lib netapi32.lib ^
-             mswsock.lib ole32.lib user32.lib gdi32.lib advapi32.lib ^
-             Secur32.lib Crypt32.lib
+             /I"..\..\..\..\pjlib\include" ^
+             /I"..\..\..\..\pjlib-util\include" ^
+             /I"..\..\..\..\pjmedia\include" ^
+             /I"..\..\..\..\pjsip\include" ^
+             /I"..\..\..\..\pjnath\include" ^
+             /c pjsua2_wrap.cpp /Fo:pjsua2_wrap.obj
+
+      - name: Link pjsua2.dll
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
+          cd pjproject\pjsip-apps\src\swig\csharp
+          link /nologo /DLL /OUT:pjsua2.dll pjsua2_wrap.obj ^
+               /LIBPATH:"..\..\..\..\lib" ^
+               /WHOLEARCHIVE ^
+               ws2_32.lib Iphlpapi.lib dsound.lib dxguid.lib netapi32.lib ^
+               mswsock.lib ole32.lib user32.lib gdi32.lib advapi32.lib ^
+               Secur32.lib Crypt32.lib
 
       - name: Copy to runtimes
+        shell: cmd
         run: |
-          mkdir -p src\PjSip.Net.Native.Win64\runtimes\win-x64\native
+          mkdir src\PjSip.Net.Native.Win64\runtimes\win-x64\native 2>nul
           copy pjproject\pjsip-apps\src\swig\csharp\pjsua2.dll src\PjSip.Net.Native.Win64\runtimes\win-x64\native\
 
       - name: Upload artifact
@@ -70,25 +84,63 @@ jobs:
           name: native-win-x64
           path: src/PjSip.Net.Native.Win64/runtimes/win-x64/native/pjsua2.dll
 
-  build-macos:
-    runs-on: macos-14  # Apple Silicon (arm64)
-    strategy:
-      matrix:
-        include:
-          - arch: arm64
-            rid: osx-arm64
-            host: arm-apple-darwin
-            cflags: "-arch arm64"
-          - arch: x86_64
-            rid: osx-x64
-            host: x86_64-apple-darwin
-            cflags: "-arch x86_64"
+  build-macos-arm64:
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
 
       - name: Install dependencies
+        run: brew install swig
+
+      - name: Clone pjproject
+        run: git clone --branch 2.16 --depth 1 https://github.com/pjsip/pjproject.git pjproject
+
+      - name: Copy config_site.h
+        run: cp native/config_site.h pjproject/pjlib/include/pj/config_site.h
+
+      - name: Configure and build pjproject
         run: |
-          brew install swig openssl@3
+          cd pjproject
+          ./configure --host=arm-apple-darwin
+          make dep
+          make -j$(sysctl -n hw.logicalcpu)
+
+      - name: Build SWIG wrapper
+        run: |
+          cd pjproject/pjsip-apps/src/swig
+          make
+
+      - name: Link libpjsua2.dylib
+        run: |
+          cd pjproject/pjsip-apps/src/swig/csharp
+          pj_libs=$(find "$GITHUB_WORKSPACE/pjproject/lib" -name "*.a" | tr '\n' ' ')
+          g++ -shared -arch arm64 -o libpjsua2.dylib \
+              pjsua2_wrap.o \
+              $pj_libs \
+              -framework CoreAudio -framework AudioToolbox -framework AVFoundation \
+              -framework CoreMedia -framework Security -framework SystemConfiguration \
+              -framework Foundation -framework Network \
+              -lpthread
+
+      - name: Copy to runtimes
+        run: |
+          OUTPUT_DIR="src/PjSip.Net.Native.MacOS/runtimes/osx-arm64/native"
+          mkdir -p "$OUTPUT_DIR"
+          cp pjproject/pjsip-apps/src/swig/csharp/libpjsua2.dylib "$OUTPUT_DIR/"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-osx-arm64
+          path: src/PjSip.Net.Native.MacOS/runtimes/osx-arm64/native/libpjsua2.dylib
+
+  build-macos-x64:
+    runs-on: macos-13
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: brew install swig openssl@3
 
       - name: Clone pjproject
         run: git clone --branch 2.16 --depth 1 https://github.com/pjsip/pjproject.git pjproject
@@ -100,8 +152,7 @@ jobs:
         run: |
           cd pjproject
           OPENSSL_PREFIX="$(brew --prefix openssl@3)"
-          CFLAGS="${{ matrix.cflags }}" LDFLAGS="${{ matrix.cflags }}" \
-              ./configure --host=${{ matrix.host }} --with-ssl="$OPENSSL_PREFIX"
+          ./configure --with-ssl="$OPENSSL_PREFIX"
           make dep
           make -j$(sysctl -n hw.logicalcpu)
 
@@ -114,8 +165,8 @@ jobs:
         run: |
           cd pjproject/pjsip-apps/src/swig/csharp
           OPENSSL_PREFIX="$(brew --prefix openssl@3)"
-          pj_libs=$(find ../../../../../../pjproject/lib -name "*.a" | tr '\n' ' ')
-          g++ -shared ${{ matrix.cflags }} -o libpjsua2.dylib \
+          pj_libs=$(find "$GITHUB_WORKSPACE/pjproject/lib" -name "*.a" | tr '\n' ' ')
+          g++ -shared -arch x86_64 -o libpjsua2.dylib \
               pjsua2_wrap.o \
               $pj_libs \
               -framework CoreAudio -framework AudioToolbox -framework AVFoundation \
@@ -126,15 +177,15 @@ jobs:
 
       - name: Copy to runtimes
         run: |
-          OUTPUT_DIR="src/PjSip.Net.Native.MacOS/runtimes/${{ matrix.rid }}/native"
+          OUTPUT_DIR="src/PjSip.Net.Native.MacOS/runtimes/osx-x64/native"
           mkdir -p "$OUTPUT_DIR"
           cp pjproject/pjsip-apps/src/swig/csharp/libpjsua2.dylib "$OUTPUT_DIR/"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: native-${{ matrix.rid }}
-          path: src/PjSip.Net.Native.MacOS/runtimes/${{ matrix.rid }}/native/libpjsua2.dylib
+          name: native-osx-x64
+          path: src/PjSip.Net.Native.MacOS/runtimes/osx-x64/native/libpjsua2.dylib
 
   build-android:
     runs-on: ubuntu-latest
@@ -162,7 +213,7 @@ jobs:
           TARGET_ABI: arm64-v8a
         run: |
           cd pjproject
-          ./configure-android --use-ndk-cflags
+          ./configure-android --use-ndk-cflags --disable-ssl
           make dep
           make -j$(nproc)
 
@@ -181,7 +232,7 @@ jobs:
           cd pjproject/pjsip-apps/src/swig/csharp
           TOOLCHAIN="$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64"
           CC="$TOOLCHAIN/bin/aarch64-linux-android28-clang++"
-          pj_libs=$(find ../../../../../../pjproject/lib -name "*.a" | tr '\n' ' ')
+          pj_libs=$(find "$GITHUB_WORKSPACE/pjproject/lib" -name "*.a" | tr '\n' ' ')
           $CC -shared -o libpjsua2.so \
               pjsua2_wrap.o \
               $pj_libs \
@@ -218,12 +269,13 @@ jobs:
         run: |
           cd pjproject
           IOS_SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
-          export CFLAGS="-arch arm64 -isysroot $IOS_SDK -miphoneos-version-min=16.0"
+          export CFLAGS="-arch arm64 -isysroot $IOS_SDK -miphoneos-version-min=16.0 -fembed-bitcode"
           export CXXFLAGS="$CFLAGS"
           export LDFLAGS="-arch arm64 -isysroot $IOS_SDK -miphoneos-version-min=16.0"
           ./configure --host=aarch64-apple-darwin \
               --disable-sdl --disable-ffmpeg --disable-v4l2 \
-              --disable-openh264 --disable-vpx --disable-libyuv
+              --disable-openh264 --disable-vpx --disable-libyuv \
+              --disable-ssl
           make dep
           make -j$(sysctl -n hw.logicalcpu)
 
@@ -278,9 +330,8 @@ jobs:
           name: native-ios-arm64
           path: src/PjSip.Net.Native.iOS/runtimes/ios-arm64/native/libpjsua2.dylib
 
-  # Collect all native binaries into a single artifact
   collect:
-    needs: [build-windows, build-macos, build-android, build-ios]
+    needs: [build-windows, build-macos-arm64, build-macos-x64, build-android, build-ios]
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
