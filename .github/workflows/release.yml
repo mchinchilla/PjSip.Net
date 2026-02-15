@@ -42,17 +42,37 @@ jobs:
           fi
 
       - name: Restore
-        run: dotnet restore
+        shell: pwsh
+        run: |
+          $projects = @(
+            "src/PjSip.Net/PjSip.Net.csproj",
+            "tests/PjSip.Net.Tests.Unit/PjSip.Net.Tests.Unit.csproj",
+            "tests/PjSip.Net.Tests.Integration/PjSip.Net.Tests.Integration.csproj"
+          )
+          foreach ($p in $projects) { dotnet restore $p }
 
       - name: Build
-        run: >
-          dotnet build --no-restore -c ${{ env.CONFIGURATION }}
-          -p:VersionPrefix=${{ steps.version.outputs.prefix }}
-          -p:VersionSuffix=${{ steps.version.outputs.suffix }}
-          -p:ContinuousIntegrationBuild=true
+        shell: pwsh
+        run: |
+          $versionArgs = @(
+            "-p:VersionPrefix=${{ steps.version.outputs.prefix }}",
+            "-p:VersionSuffix=${{ steps.version.outputs.suffix }}",
+            "-p:ContinuousIntegrationBuild=true"
+          )
+          $projects = @(
+            "src/PjSip.Net/PjSip.Net.csproj",
+            "tests/PjSip.Net.Tests.Unit/PjSip.Net.Tests.Unit.csproj",
+            "tests/PjSip.Net.Tests.Integration/PjSip.Net.Tests.Integration.csproj"
+          )
+          foreach ($p in $projects) {
+            dotnet build $p --no-restore -c ${{ env.CONFIGURATION }} @versionArgs
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
 
       - name: Test
-        run: dotnet test --no-build -c ${{ env.CONFIGURATION }}
+        run: |
+          dotnet test tests/PjSip.Net.Tests.Unit/PjSip.Net.Tests.Unit.csproj --no-build -c ${{ env.CONFIGURATION }}
+          dotnet test tests/PjSip.Net.Tests.Integration/PjSip.Net.Tests.Integration.csproj --no-build -c ${{ env.CONFIGURATION }}
 
       - name: Pack
         shell: pwsh
