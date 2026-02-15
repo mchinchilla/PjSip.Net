@@ -19,6 +19,7 @@
 
   <ItemGroup>
     <Content Include="runtimes\ios-arm64\native\**" PackagePath="runtimes/ios-arm64/native" />
+    <None Include="lib\net10.0-ios18.0\_._" Pack="true" PackagePath="lib/net10.0-ios18.0" />
     <None Include="build\**" Pack="true" PackagePath="build" />
     <None Include="buildTransitive\**" Pack="true" PackagePath="buildTransitive" />
   </ItemGroup>
