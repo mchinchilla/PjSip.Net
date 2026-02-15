@@ -10,6 +10,7 @@
  * Common: G.729 codec via BCG729 (all platforms)
  * ================================================================ */
 #define PJMEDIA_HAS_BCG729 1
+#define BCG729_STATIC_DEFINE 1
 
 /* ================================================================
  * Windows: Schannel TLS (no OpenSSL dependency)

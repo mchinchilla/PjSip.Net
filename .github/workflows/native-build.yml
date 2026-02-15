@@ -496,6 +496,22 @@ jobs:
           find . -name "*.a" -path "*/lib/*"
           test -n "$(find . -name '*.a' -path '*/lib/*' -print -quit)" || { echo "ERROR: No .a libraries found"; exit 1; }
 
+      - name: Compile BCG729 codec into pjmedia-codec
+        run: |
+          cd pjproject
+          IOS_SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
+          echo "=== Compiling bcg729.c for iOS ==="
+          xcrun -sdk iphoneos clang \
+              -arch arm64 -isysroot "$IOS_SDK" -miphoneos-version-min=16.0 \
+              -I"pjlib/include" -I"pjlib-util/include" -I"pjmedia/include" \
+              -I"pjsip/include" -I"pjnath/include" \
+              -I"$GITHUB_WORKSPACE/bcg729-install/include" \
+              -DPJ_AUTOCONF=1 -DBCG729_STATIC_DEFINE \
+              -O2 -c pjmedia/src/pjmedia-codec/bcg729.c -o bcg729.o
+          CODEC_LIB=$(find . -name "libpjmedia-codec-*.a" -path "*/lib/*" | head -1)
+          echo "Adding bcg729.o to $CODEC_LIB"
+          ar rs "$CODEC_LIB" bcg729.o
+
       - name: Compile iOS Objective-C sources
         run: |
           cd pjproject
