@@ -13,8 +13,10 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PJ_DIR="$REPO_ROOT/pjproject"
 OUTPUT_DIR="$REPO_ROOT/src/PjSip.Net.Native.Android/runtimes/android-arm64/native"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+OPENSSL_INSTALL="$REPO_ROOT/openssl-install"
 TARGET_ABI="arm64-v8a"
 ANDROID_API=28
+OPENSSL_VERSION="3.4.1"
 
 # --- Parse args ---
 NDK_ROOT=""
@@ -48,6 +50,26 @@ if [ -z "$NDK_ROOT" ] || [ ! -d "$NDK_ROOT" ]; then
 fi
 echo "Using NDK: $NDK_ROOT"
 
+# --- Build OpenSSL for Android arm64 ---
+if [ ! -f "$OPENSSL_INSTALL/lib/libssl.a" ]; then
+    echo "Building OpenSSL $OPENSSL_VERSION for Android arm64..."
+    cd "$REPO_ROOT"
+    if [ ! -d "openssl-${OPENSSL_VERSION}" ]; then
+        curl -sL "https://github.com/openssl/openssl/releases/download/openssl-${OPENSSL_VERSION}/openssl-${OPENSSL_VERSION}.tar.gz" -o openssl.tar.gz
+        tar xzf openssl.tar.gz
+        rm openssl.tar.gz
+    fi
+    cd "openssl-${OPENSSL_VERSION}"
+    export ANDROID_NDK_ROOT="$NDK_ROOT"
+    export PATH="$NDK_ROOT/toolchains/llvm/prebuilt/$(uname -s | tr '[:upper:]' '[:lower:]')-x86_64/bin:$PATH"
+    ./Configure android-arm64 -D__ANDROID_API__=$ANDROID_API \
+        --prefix="$OPENSSL_INSTALL" \
+        no-shared no-tests
+    make -j"$(nproc 2>/dev/null || sysctl -n hw.logicalcpu 2>/dev/null || echo 4)"
+    make install_sw
+    echo "OpenSSL installed to $OPENSSL_INSTALL"
+fi
+
 # --- Clone pjproject ---
 if [ ! -d "$PJ_DIR" ]; then
     echo "Cloning pjproject 2.16..."
@@ -68,7 +90,7 @@ export TARGET_ABI="$TARGET_ABI"
 # pjproject has a configure-android script
 ./configure-android \
     --use-ndk-cflags \
-    --with-ssl="${NDK_ROOT}/toolchains/llvm/prebuilt/$(uname -s | tr '[:upper:]' '[:lower:]')-x86_64/sysroot"
+    --with-ssl="$OPENSSL_INSTALL"
 
 make dep
 make -j"$(nproc 2>/dev/null || sysctl -n hw.logicalcpu 2>/dev/null || echo 4)"
@@ -92,6 +114,7 @@ mkdir -p "$OUTPUT_DIR"
 $CC -shared -o "$OUTPUT_DIR/libpjsua2.so" \
     pjsua2_wrap.o \
     $pj_libs \
+    -L"$OPENSSL_INSTALL/lib" -lssl -lcrypto \
     -lOpenSLES -llog -landroid -lmediandk \
     -lpthread -lm
 

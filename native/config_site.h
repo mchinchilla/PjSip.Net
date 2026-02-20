@@ -45,11 +45,11 @@
 #endif
 
 /* ================================================================
- * Android: disable SSL for now (no OpenSSL bundled in NDK)
- * To enable: build OpenSSL for Android and set PJ_HAS_SSL_SOCK=1
+ * Android: OpenSSL TLS
  * ================================================================ */
 #if defined(__ANDROID__)
-  #define PJ_HAS_SSL_SOCK 0
+  #define PJ_HAS_SSL_SOCK 1
+  #define PJ_SSL_SOCK_IMP PJ_SSL_SOCK_IMP_OPENSSL
   #define PJ_IS_BIG_ENDIAN 0
   #define PJ_IS_LITTLE_ENDIAN 1
 #endif
