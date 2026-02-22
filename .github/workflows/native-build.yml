@@ -517,11 +517,11 @@ jobs:
       - name: Configure pjproject for iOS
         run: |
           cd pjproject
-          IOS_SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
-          export CFLAGS="-arch arm64 -isysroot $IOS_SDK -miphoneos-version-min=16.0 -I$GITHUB_WORKSPACE/bcg729-install/include"
+          export CFLAGS="-I$GITHUB_WORKSPACE/bcg729-install/include"
           export CXXFLAGS="$CFLAGS"
-          export LDFLAGS="-arch arm64 -isysroot $IOS_SDK -miphoneos-version-min=16.0 -L$GITHUB_WORKSPACE/bcg729-install/lib"
-          ./configure --host=aarch64-apple-darwin \
+          export LDFLAGS="-L$GITHUB_WORKSPACE/bcg729-install/lib"
+          export MIN_IOS="16.0"
+          ARCH="-arch arm64" ./configure-iphone \
               --disable-sdl --disable-ffmpeg --disable-v4l2 \
               --disable-openh264 --disable-vpx --disable-libyuv \
               --with-bcg729="$GITHUB_WORKSPACE/bcg729-install"

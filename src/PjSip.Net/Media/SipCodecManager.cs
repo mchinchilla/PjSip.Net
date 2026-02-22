@@ -51,7 +51,17 @@ internal sealed class SipCodecManager : ISipCodecManager
             ?? throw new InvalidOperationException("Cannot set codec priority: SIP endpoint is not initialized. Call StartAsync() first.");
 
         _logger.LogInformation("Setting codec {CodecId} priority to {Priority}", codecId, priority);
-        Invoker.Invoke(() => ep.codecSetPriority(codecId, (byte)Math.Clamp(priority, 0, 255)));
+        Invoker.Invoke(() =>
+        {
+            try
+            {
+                ep.codecSetPriority(codecId, (byte)Math.Clamp(priority, 0, 255));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to set codec {CodecId} priority", codecId);
+            }
+        });
     }
 
     public void DisableCodec(string codecId) => SetCodecPriority(codecId, 0);

@@ -73,16 +73,23 @@ internal sealed class SipAudioManager : ISipAudioManager
         {
             Invoker.Invoke(() =>
             {
-                ep.audDevManager().setCaptureDev(deviceId);
-                var devInfo = ep.audDevManager().getDevInfo(deviceId);
-                CurrentInputDevice = new AudioDeviceInfo
+                try
                 {
-                    DeviceId = deviceId,
-                    Name = devInfo.name,
-                    InputChannels = (int)devInfo.inputCount,
-                    OutputChannels = (int)devInfo.outputCount,
-                    Driver = devInfo.driver
-                };
+                    ep.audDevManager().setCaptureDev(deviceId);
+                    var devInfo = ep.audDevManager().getDevInfo(deviceId);
+                    CurrentInputDevice = new AudioDeviceInfo
+                    {
+                        DeviceId = deviceId,
+                        Name = devInfo.name,
+                        InputChannels = (int)devInfo.inputCount,
+                        OutputChannels = (int)devInfo.outputCount,
+                        Driver = devInfo.driver
+                    };
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to set capture device {DeviceId}", deviceId);
+                }
             });
         }
         else
@@ -98,16 +105,23 @@ internal sealed class SipAudioManager : ISipAudioManager
         {
             Invoker.Invoke(() =>
             {
-                ep.audDevManager().setPlaybackDev(deviceId);
-                var devInfo = ep.audDevManager().getDevInfo(deviceId);
-                CurrentOutputDevice = new AudioDeviceInfo
+                try
                 {
-                    DeviceId = deviceId,
-                    Name = devInfo.name,
-                    InputChannels = (int)devInfo.inputCount,
-                    OutputChannels = (int)devInfo.outputCount,
-                    Driver = devInfo.driver
-                };
+                    ep.audDevManager().setPlaybackDev(deviceId);
+                    var devInfo = ep.audDevManager().getDevInfo(deviceId);
+                    CurrentOutputDevice = new AudioDeviceInfo
+                    {
+                        DeviceId = deviceId,
+                        Name = devInfo.name,
+                        InputChannels = (int)devInfo.inputCount,
+                        OutputChannels = (int)devInfo.outputCount,
+                        Driver = devInfo.driver
+                    };
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to set playback device {DeviceId}", deviceId);
+                }
             });
         }
         else
