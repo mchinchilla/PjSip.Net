@@ -521,7 +521,7 @@ jobs:
           export DEVPATH="$(xcode-select -p)/Platforms/iPhoneOS.platform/Developer"
           export IPHONESDK="$(xcrun --sdk iphoneos --show-sdk-path)"
           export CFLAGS="-I$GITHUB_WORKSPACE/bcg729-install/include -miphoneos-version-min=16.0"
-          export CXXFLAGS="$CFLAGS"
+          export CXXFLAGS="$CFLAGS -std=c++14"
           export LDFLAGS="-L$GITHUB_WORKSPACE/bcg729-install/lib -miphoneos-version-min=16.0"
           ARCH="-arch arm64" ./configure-iphone \
               --disable-sdl --disable-ffmpeg --disable-v4l2 \
