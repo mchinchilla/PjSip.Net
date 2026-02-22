@@ -27,7 +27,7 @@ internal sealed class SipCallQualityMonitor : ISipCallQualityMonitor
             return null;
         }
 
-        return GetQualityFromNative(managed);
+        return _endpointManager.Invoker.InvokeAsync(() => GetQualityFromNative(managed)).GetAwaiter().GetResult();
     }
 
     public async Task<CallQualityInfo?> GetQualityAsync(ISipCall call, CancellationToken ct = default)

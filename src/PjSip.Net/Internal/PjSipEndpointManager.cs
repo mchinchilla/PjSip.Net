@@ -58,7 +58,8 @@ internal sealed class PjSipEndpointManager : IDisposable
             _endpoint.TransportStateChanged += (s, e) => TransportStateChanged?.Invoke(this, e);
 
             _endpoint.libCreate();
-            _endpoint.libRegisterThread("PjSip-Worker");
+            // Note: the thread calling libCreate() is automatically registered
+            // with pjlib.  No need to call libRegisterThread() here.
 
             // Configure EpConfig
             using var epConfig = new EpConfig();

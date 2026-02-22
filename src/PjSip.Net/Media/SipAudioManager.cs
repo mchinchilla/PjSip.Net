@@ -18,6 +18,8 @@ internal sealed class SipAudioManager : ISipAudioManager
         _logger = logger;
     }
 
+    private PjSipThreadSafeInvoker Invoker => _endpointManager.Invoker;
+
     public AudioDeviceInfo? CurrentInputDevice { get; private set; }
     public AudioDeviceInfo? CurrentOutputDevice { get; private set; }
 
@@ -69,16 +71,19 @@ internal sealed class SipAudioManager : ISipAudioManager
         var ep = _endpointManager.Endpoint;
         if (ep is not null)
         {
-            ep.audDevManager().setCaptureDev(deviceId);
-            var devInfo = ep.audDevManager().getDevInfo(deviceId);
-            CurrentInputDevice = new AudioDeviceInfo
+            Invoker.Invoke(() =>
             {
-                DeviceId = deviceId,
-                Name = devInfo.name,
-                InputChannels = (int)devInfo.inputCount,
-                OutputChannels = (int)devInfo.outputCount,
-                Driver = devInfo.driver
-            };
+                ep.audDevManager().setCaptureDev(deviceId);
+                var devInfo = ep.audDevManager().getDevInfo(deviceId);
+                CurrentInputDevice = new AudioDeviceInfo
+                {
+                    DeviceId = deviceId,
+                    Name = devInfo.name,
+                    InputChannels = (int)devInfo.inputCount,
+                    OutputChannels = (int)devInfo.outputCount,
+                    Driver = devInfo.driver
+                };
+            });
         }
         else
         {
@@ -91,16 +96,19 @@ internal sealed class SipAudioManager : ISipAudioManager
         var ep = _endpointManager.Endpoint;
         if (ep is not null)
         {
-            ep.audDevManager().setPlaybackDev(deviceId);
-            var devInfo = ep.audDevManager().getDevInfo(deviceId);
-            CurrentOutputDevice = new AudioDeviceInfo
+            Invoker.Invoke(() =>
             {
-                DeviceId = deviceId,
-                Name = devInfo.name,
-                InputChannels = (int)devInfo.inputCount,
-                OutputChannels = (int)devInfo.outputCount,
-                Driver = devInfo.driver
-            };
+                ep.audDevManager().setPlaybackDev(deviceId);
+                var devInfo = ep.audDevManager().getDevInfo(deviceId);
+                CurrentOutputDevice = new AudioDeviceInfo
+                {
+                    DeviceId = deviceId,
+                    Name = devInfo.name,
+                    InputChannels = (int)devInfo.inputCount,
+                    OutputChannels = (int)devInfo.outputCount,
+                    Driver = devInfo.driver
+                };
+            });
         }
         else
         {
@@ -113,28 +121,31 @@ internal sealed class SipAudioManager : ISipAudioManager
         var ep = _endpointManager.Endpoint;
         if (ep is null) return [];
 
-        var devices = new List<AudioDeviceInfo>();
-        var audMgr = ep.audDevManager();
-        var devList = audMgr.enumDev2();
-
-        for (int i = 0; i < devList.Count; i++)
+        return Invoker.InvokeAsync(() =>
         {
-            var dev = devList[i];
-            bool matches = input ? dev.inputCount > 0 : dev.outputCount > 0;
-            if (matches)
-            {
-                devices.Add(new AudioDeviceInfo
-                {
-                    DeviceId = i,
-                    Name = dev.name,
-                    InputChannels = (int)dev.inputCount,
-                    OutputChannels = (int)dev.outputCount,
-                    Driver = dev.driver
-                });
-            }
-        }
+            var devices = new List<AudioDeviceInfo>();
+            var audMgr = ep.audDevManager();
+            var devList = audMgr.enumDev2();
 
-        return devices;
+            for (int i = 0; i < devList.Count; i++)
+            {
+                var dev = devList[i];
+                bool matches = input ? dev.inputCount > 0 : dev.outputCount > 0;
+                if (matches)
+                {
+                    devices.Add(new AudioDeviceInfo
+                    {
+                        DeviceId = i,
+                        Name = dev.name,
+                        InputChannels = (int)dev.inputCount,
+                        OutputChannels = (int)dev.outputCount,
+                        Driver = dev.driver
+                    });
+                }
+            }
+
+            return (IReadOnlyList<AudioDeviceInfo>)devices;
+        }).GetAwaiter().GetResult();
     }
 
     private void ApplyInputLevel(float level)
@@ -142,15 +153,18 @@ internal sealed class SipAudioManager : ISipAudioManager
         var ep = _endpointManager.Endpoint;
         if (ep is null) return;
 
-        try
+        Invoker.Invoke(() =>
         {
-            var capMedia = ep.audDevManager().getCaptureDevMedia();
-            capMedia.adjustRxLevel(level);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogDebug(ex, "Failed to adjust input level — no active media or endpoint not ready");
-        }
+            try
+            {
+                var capMedia = ep.audDevManager().getCaptureDevMedia();
+                capMedia.adjustRxLevel(level);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Failed to adjust input level — no active media or endpoint not ready");
+            }
+        });
     }
 
     private void ApplyOutputLevel(float level)
@@ -158,14 +172,17 @@ internal sealed class SipAudioManager : ISipAudioManager
         var ep = _endpointManager.Endpoint;
         if (ep is null) return;
 
-        try
+        Invoker.Invoke(() =>
         {
-            var playMedia = ep.audDevManager().getPlaybackDevMedia();
-            playMedia.adjustRxLevel(level);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogDebug(ex, "Failed to adjust output level — no active media or endpoint not ready");
-        }
+            try
+            {
+                var playMedia = ep.audDevManager().getPlaybackDevMedia();
+                playMedia.adjustRxLevel(level);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Failed to adjust output level — no active media or endpoint not ready");
+            }
+        });
     }
 }

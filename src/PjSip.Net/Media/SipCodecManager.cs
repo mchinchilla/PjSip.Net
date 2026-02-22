@@ -16,26 +16,31 @@ internal sealed class SipCodecManager : ISipCodecManager
         _logger = logger;
     }
 
+    private PjSipThreadSafeInvoker Invoker => _endpointManager.Invoker;
+
     public IReadOnlyList<CodecInfo> GetCodecs()
     {
         var ep = _endpointManager.Endpoint
             ?? throw new InvalidOperationException("Cannot enumerate codecs: SIP endpoint is not initialized. Call StartAsync() first.");
 
-        var codecList = ep.codecEnum2();
-        var result = new List<CodecInfo>(codecList.Count);
-
-        for (int i = 0; i < codecList.Count; i++)
+        return Invoker.InvokeAsync(() =>
         {
-            var c = codecList[i];
-            result.Add(new CodecInfo
-            {
-                CodecId = c.codecId,
-                Description = c.desc,
-                Priority = c.priority
-            });
-        }
+            var codecList = ep.codecEnum2();
+            var result = new List<CodecInfo>(codecList.Count);
 
-        return result;
+            for (int i = 0; i < codecList.Count; i++)
+            {
+                var c = codecList[i];
+                result.Add(new CodecInfo
+                {
+                    CodecId = c.codecId,
+                    Description = c.desc,
+                    Priority = c.priority
+                });
+            }
+
+            return (IReadOnlyList<CodecInfo>)result;
+        }).GetAwaiter().GetResult();
     }
 
     public void SetCodecPriority(string codecId, int priority)
@@ -46,7 +51,7 @@ internal sealed class SipCodecManager : ISipCodecManager
             ?? throw new InvalidOperationException("Cannot set codec priority: SIP endpoint is not initialized. Call StartAsync() first.");
 
         _logger.LogInformation("Setting codec {CodecId} priority to {Priority}", codecId, priority);
-        ep.codecSetPriority(codecId, (byte)Math.Clamp(priority, 0, 255));
+        Invoker.Invoke(() => ep.codecSetPriority(codecId, (byte)Math.Clamp(priority, 0, 255)));
     }
 
     public void DisableCodec(string codecId) => SetCodecPriority(codecId, 0);
