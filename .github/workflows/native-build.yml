@@ -518,14 +518,11 @@ jobs:
         run: |
           cd pjproject
           # Resolve the Xcode developer path dynamically (handles Xcode_*.app naming)
-          DEVPATH="$(xcode-select -p)/Platforms/iPhoneOS.platform/Developer"
-          IOS_SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
-          export CFLAGS="-I$GITHUB_WORKSPACE/bcg729-install/include"
+          export DEVPATH="$(xcode-select -p)/Platforms/iPhoneOS.platform/Developer"
+          export IPHONESDK="$(xcrun --sdk iphoneos --show-sdk-path)"
+          export CFLAGS="-I$GITHUB_WORKSPACE/bcg729-install/include -miphoneos-version-min=16.0"
           export CXXFLAGS="$CFLAGS"
-          export LDFLAGS="-L$GITHUB_WORKSPACE/bcg729-install/lib"
-          export DEVPATH
-          export MIN_IOS=16.0
-          export IPHONESDK="$IOS_SDK"
+          export LDFLAGS="-L$GITHUB_WORKSPACE/bcg729-install/lib -miphoneos-version-min=16.0"
           ARCH="-arch arm64" ./configure-iphone \
               --disable-sdl --disable-ffmpeg --disable-v4l2 \
               --disable-openh264 --disable-vpx --disable-libyuv \
