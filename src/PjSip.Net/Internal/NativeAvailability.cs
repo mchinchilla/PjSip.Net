@@ -43,6 +43,27 @@ internal static class NativeAvailability
             }
             Log($"TryLoad('{libFileName}') failed");
 
+            // On iOS/Mac Catalyst, the dylib sits at the root of the .app bundle.
+            // AppContext.BaseDirectory may point to a subdirectory, so use the
+            // bundle path directly via @executable_path resolution.
+            if (OperatingSystem.IsIOS() || OperatingSystem.IsMacCatalyst())
+            {
+                string bundlePath = GetAppleBundlePath();
+                Log($"Apple bundle path='{bundlePath}'");
+                if (!string.IsNullOrEmpty(bundlePath))
+                {
+                    string bundleLibPath = Path.Combine(bundlePath, libFileName);
+                    bool bundleLibExists = File.Exists(bundleLibPath);
+                    Log($"bundleLibPath='{bundleLibPath}' exists={bundleLibExists}");
+                    if (NativeLibrary.TryLoad(bundleLibPath, out _))
+                    {
+                        Log("Loaded via Apple bundle path");
+                        return true;
+                    }
+                    Log("TryLoad(bundleLibPath) failed");
+                }
+            }
+
             // Fallback: probe the runtimes folder next to the Interop assembly.
             string baseDir = Path.GetDirectoryName(interopAssembly.Location)
                 ?? AppContext.BaseDirectory;
@@ -75,6 +96,44 @@ internal static class NativeAvailability
         {
             Log($"Probe exception: {ex}");
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Gets the main bundle path on Apple platforms (iOS / Mac Catalyst).
+    /// Uses reflection to avoid a hard dependency on the Apple bindings.
+    /// </summary>
+    private static string GetAppleBundlePath()
+    {
+        try
+        {
+            // Foundation.NSBundle.MainBundle.BundlePath
+            var nsBundleType = Type.GetType("Foundation.NSBundle, Microsoft.iOS")
+                ?? Type.GetType("Foundation.NSBundle, Microsoft.MacCatalyst")
+                ?? Type.GetType("Foundation.NSBundle, Xamarin.iOS");
+            if (nsBundleType is null)
+            {
+                Log("NSBundle type not found via reflection");
+                return string.Empty;
+            }
+
+            var mainBundleProp = nsBundleType.GetProperty("MainBundle",
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+            var mainBundle = mainBundleProp?.GetValue(null);
+            if (mainBundle is null)
+            {
+                Log("NSBundle.MainBundle returned null");
+                return string.Empty;
+            }
+
+            var bundlePathProp = nsBundleType.GetProperty("BundlePath",
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+            return bundlePathProp?.GetValue(mainBundle) as string ?? string.Empty;
+        }
+        catch (Exception ex)
+        {
+            Log($"GetAppleBundlePath exception: {ex.Message}");
+            return string.Empty;
         }
     }
 

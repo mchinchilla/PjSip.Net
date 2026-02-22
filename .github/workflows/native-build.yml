@@ -606,16 +606,22 @@ jobs:
           echo "Linking with ObjC objects: $objc_objs"
           xcrun -sdk iphoneos clang++ \
               -arch arm64 -isysroot "$IOS_SDK" -miphoneos-version-min=16.0 \
-              -dynamiclib -install_name @rpath/libpjsua2.dylib \
+              -dynamiclib -install_name @executable_path/libpjsua2.dylib \
               -o libpjsua2.dylib \
               pjsua2_wrap.o \
               $objc_objs \
               $pj_libs \
-              -L"$GITHUB_WORKSPACE/bcg729-install/lib" -lbcg729 \
+              "$GITHUB_WORKSPACE/bcg729-install/lib/libbcg729.a" \
               -framework CoreAudio -framework AudioToolbox -framework AVFoundation \
               -framework CoreMedia -framework Security -framework SystemConfiguration \
               -framework Foundation -framework Network -framework UIKit \
+              -framework AVFAudio \
               -lpthread
+
+          echo "=== Verify no dynamic bcg729 dependency ==="
+          otool -L libpjsua2.dylib | grep -i bcg729 && echo "ERROR: bcg729 still dynamic!" && exit 1 || echo "OK: bcg729 statically linked"
+          echo "=== Verify install name ==="
+          otool -D libpjsua2.dylib
 
       - name: Copy to runtimes
         run: |

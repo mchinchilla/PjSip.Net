@@ -55,6 +55,22 @@ internal static class NativeLoader
                 return handle;
             }
 
+            // On iOS/Mac Catalyst, the dylib sits at the root of the .app bundle.
+            // AppContext.BaseDirectory may not point there, so resolve via NSBundle.
+            if (OperatingSystem.IsIOS() || OperatingSystem.IsMacCatalyst())
+            {
+                string bundlePath = GetAppleBundlePath();
+                if (!string.IsNullOrEmpty(bundlePath))
+                {
+                    string bundleLibPath = Path.Combine(bundlePath, libFileName);
+                    if (NativeLibrary.TryLoad(bundleLibPath, out handle))
+                    {
+                        _resolved = true;
+                        return handle;
+                    }
+                }
+            }
+
             string flatPath = Path.Combine(assemblyDirectory, libFileName);
             if (NativeLibrary.TryLoad(flatPath, out handle))
             {
@@ -72,6 +88,34 @@ internal static class NativeLoader
         }
 
         return nint.Zero;
+    }
+
+    /// <summary>
+    /// Gets the main bundle path on Apple platforms (iOS / Mac Catalyst).
+    /// Uses reflection to avoid a hard dependency on the Apple bindings.
+    /// </summary>
+    private static string GetAppleBundlePath()
+    {
+        try
+        {
+            var nsBundleType = Type.GetType("Foundation.NSBundle, Microsoft.iOS")
+                ?? Type.GetType("Foundation.NSBundle, Microsoft.MacCatalyst")
+                ?? Type.GetType("Foundation.NSBundle, Xamarin.iOS");
+            if (nsBundleType is null) return string.Empty;
+
+            var mainBundleProp = nsBundleType.GetProperty("MainBundle",
+                BindingFlags.Public | BindingFlags.Static);
+            var mainBundle = mainBundleProp?.GetValue(null);
+            if (mainBundle is null) return string.Empty;
+
+            var bundlePathProp = nsBundleType.GetProperty("BundlePath",
+                BindingFlags.Public | BindingFlags.Instance);
+            return bundlePathProp?.GetValue(mainBundle) as string ?? string.Empty;
+        }
+        catch
+        {
+            return string.Empty;
+        }
     }
 
     /// <summary>Returns just the native library file name for the current platform.</summary>
