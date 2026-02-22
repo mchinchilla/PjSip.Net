@@ -211,7 +211,18 @@ internal sealed class ManagedCall : ISipCall
             }
         }
 
-        _native.makeCall(Info.RemoteUri, prm);
+        try
+        {
+            _native.makeCall(Info.RemoteUri, prm);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "makeCall failed for {RemoteUri}", Info.RemoteUri);
+            // Clean up the native bridge since the call was never established
+            _native.Dispose();
+            _native = null;
+            SetState(SipCallState.Disconnected);
+        }
     }
 
     public void Answer(int statusCode = 200)

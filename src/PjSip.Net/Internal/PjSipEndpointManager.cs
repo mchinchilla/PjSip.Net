@@ -98,6 +98,16 @@ internal sealed class PjSipEndpointManager : IDisposable
 
             _endpoint.libStart();
 
+            // On iOS, use null sound device initially. The native dylib must be
+            // built with PJ_CONFIG_IPHONE=1 and the iOS config_site for
+            // CoreAudio to work. Once the native library is rebuilt correctly,
+            // this workaround can be removed.
+            if (OperatingSystem.IsIOS() && !OperatingSystem.IsMacCatalyst())
+            {
+                _logger.LogInformation("iOS: setting null sound device (pending native rebuild with iOS config)");
+                _endpoint.audDevManager().setNullDev();
+            }
+
             _initialized = true;
             _logger.LogInformation("PJSIP endpoint initialized successfully");
         });

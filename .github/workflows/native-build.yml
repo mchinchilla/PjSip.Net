@@ -495,8 +495,8 @@ jobs:
       - name: Clone pjproject
         run: git clone --branch 2.16 --depth 1 https://github.com/pjsip/pjproject.git pjproject
 
-      - name: Copy config_site.h
-        run: cp native/config_site.h pjproject/pjlib/include/pj/config_site.h
+      - name: Copy config_site.h (iOS-specific)
+        run: cp native/config_site/config_site_ios.h pjproject/pjlib/include/pj/config_site.h
 
       - name: Build BCG729
         run: |
