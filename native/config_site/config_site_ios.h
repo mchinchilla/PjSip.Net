@@ -83,14 +83,15 @@
  * -------------------------------------------------------------------------*/
 
 #define PJMEDIA_HAS_SRTP               1
-#define PJSUA_MAX_CALLS                8
-#define PJSIP_MAX_TSX_COUNT            255
-#define PJSIP_MAX_DIALOG_COUNT         127
 #define PJ_LOG_MAX_LEVEL               4
 
-#ifndef NDEBUG
-#define PJ_ENABLE_EXTRA_CHECK          0
-#endif
+/* Override values set by config_site_sample.h for iPhone builds. */
+#undef PJSUA_MAX_CALLS
+#define PJSUA_MAX_CALLS                8
+#undef PJSIP_MAX_TSX_COUNT
+#define PJSIP_MAX_TSX_COUNT            255
+#undef PJSIP_MAX_DIALOG_COUNT
+#define PJSIP_MAX_DIALOG_COUNT         127
 
 /* ---------------------------------------------------------------------------
  * Codec support
@@ -100,7 +101,8 @@
 #define PJMEDIA_HAS_GSM_CODEC         1
 #define PJMEDIA_HAS_SPEEX_CODEC       1
 #define PJMEDIA_HAS_ILBC_CODEC        1
-#define PJMEDIA_HAS_OPUS_CODEC        1
+/* Opus requires a separate libopus build for iOS — disabled for now. */
+#define PJMEDIA_HAS_OPUS_CODEC        0
 #define PJMEDIA_HAS_BCG729            1
 
 /* Disable video-related codec dependencies. */
