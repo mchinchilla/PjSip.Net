@@ -4,14 +4,15 @@
   <!--
     PjSip.Net.Native.iOS — includes the native libpjsua2.dylib for
     ios-arm64 so that it is bundled into the iOS application.
+    Excluded for simulator builds (device-only binary).
   -->
-  <!-- Only real iOS, not Mac Catalyst (which uses the macOS dylib) -->
-  <ItemGroup Condition="'$(TargetFramework)' != '' And $([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net10.0-ios')) And $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'maccatalyst'">
-    <None Include="$(MSBuildThisFileDirectory)..\..\runtimes\ios-arm64\native\libpjsua2.dylib"
-          Condition="Exists('$(MSBuildThisFileDirectory)..\..\runtimes\ios-arm64\native\libpjsua2.dylib')"
-          Link="runtimes\ios-arm64\native\libpjsua2.dylib"
-          CopyToOutputDirectory="PreserveNewest"
-          Visible="false" />
+  <!-- Only real iOS device, not Mac Catalyst (which uses the macOS dylib) and not simulator -->
+  <ItemGroup Condition="'$(TargetFramework)' != '' And $([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net10.0-ios')) And $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'maccatalyst' And '$(RuntimeIdentifier)' != 'iossimulator-arm64' And '$(RuntimeIdentifier)' != 'iossimulator-x64'">
+    <NativeReference Include="$(MSBuildThisFileDirectory)..\..\runtimes\ios-arm64\native\libpjsua2.dylib"
+          Condition="Exists('$(MSBuildThisFileDirectory)..\..\runtimes\ios-arm64\native\libpjsua2.dylib')">
+      <Kind>Dynamic</Kind>
+      <SmartLink>False</SmartLink>
+    </NativeReference>
   </ItemGroup>
 
 </Project>
