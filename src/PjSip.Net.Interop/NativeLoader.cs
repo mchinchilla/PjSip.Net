@@ -63,7 +63,8 @@ internal static class NativeLoader
             return Path.Combine("runtimes", "win-x64", "native", "pjsua2.dll");
         }
 
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        // Mac Catalyst: runs on macOS but uses the iOS TFM — check before OSX.
+        if (OperatingSystem.IsMacCatalyst() || RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
             string rid = RuntimeInformation.ProcessArchitecture switch
             {

@@ -25,6 +25,6 @@
 
     <!-- Versioning -->
     <VersionPrefix>1.0.0</VersionPrefix>
-    <VersionSuffix>alpha.1</VersionSuffix>
+    <VersionSuffix>beta.7</VersionSuffix>
   </PropertyGroup>
 </Project>

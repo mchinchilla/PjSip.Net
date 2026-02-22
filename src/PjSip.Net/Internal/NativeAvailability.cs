@@ -45,7 +45,8 @@ internal static class NativeAvailability
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             return Path.Combine("runtimes", "win-x64", "native", "pjsua2.dll");
 
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        // Mac Catalyst: runs on macOS but uses the iOS TFM — check before OSX.
+        if (OperatingSystem.IsMacCatalyst() || RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
             string rid = RuntimeInformation.ProcessArchitecture == Architecture.Arm64
                 ? "osx-arm64" : "osx-x64";
