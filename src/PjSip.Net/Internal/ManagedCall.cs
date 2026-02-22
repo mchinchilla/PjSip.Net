@@ -482,17 +482,29 @@ internal sealed class ManagedCall : ISipCall
                 {
                     _audioMedia = _native.getAudioMedia((int)i);
 
-                    // Connect to sound device
-                    var ep = _endpointManager.Endpoint;
-                    if (ep is not null)
+                    // Connect to sound device — MUST run on the PJSIP worker thread
+                    // to avoid pj_mutex_lock assertion failures (SIGABRT).
+                    var audioMedia = _audioMedia;
+                    _endpointManager.Invoker.Invoke(() =>
                     {
-                        var audMgr = ep.audDevManager();
-                        var playMedia = audMgr.getPlaybackDevMedia();
-                        var capMedia = audMgr.getCaptureDevMedia();
+                        try
+                        {
+                            var ep = _endpointManager.Endpoint;
+                            if (ep is not null && audioMedia is not null)
+                            {
+                                var audMgr = ep.audDevManager();
+                                var playMedia = audMgr.getPlaybackDevMedia();
+                                var capMedia = audMgr.getCaptureDevMedia();
 
-                        _audioMedia.startTransmit(playMedia);
-                        capMedia.startTransmit(_audioMedia);
-                    }
+                                audioMedia.startTransmit(playMedia);
+                                capMedia.startTransmit(audioMedia);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Error connecting media to sound device for call {CallId}", Id);
+                        }
+                    });
 
                     OnMediaStateChanged(true);
                     return;

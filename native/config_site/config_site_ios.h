@@ -12,7 +12,21 @@
 #ifndef __PJ_CONFIG_SITE_H__
 #define __PJ_CONFIG_SITE_H__
 
-/* Include the base iOS configuration provided by pjproject. */
+/* ---------------------------------------------------------------------------
+ * iOS-specific flag — MUST be defined BEFORE including config_site_sample.h
+ * so that the sample header activates its iPhone-specific defaults
+ * (CoreAudio AEC, audio device settings, etc.).
+ * -------------------------------------------------------------------------*/
+
+/* Mark this as an iPhone build so pjlib uses the correct APIs. */
+#define PJ_CONFIG_IPHONE               1
+
+/* Include the base iOS configuration provided by pjproject.
+ * With PJ_CONFIG_IPHONE=1 already defined, this will enable:
+ *   - CoreAudio audio device (PJMEDIA_AUDIO_DEV_HAS_COREAUDIO)
+ *   - iOS-native AEC (disables Speex AEC)
+ *   - Proper iPhone audio defaults
+ */
 #include <pj/config_site_sample.h>
 
 /* ---------------------------------------------------------------------------
@@ -49,24 +63,20 @@
  * iOS-specific audio settings and route handling
  * -------------------------------------------------------------------------*/
 
-/* Use the iOS AudioUnit audio device which supports proper audio session
- * routing, interruption handling, and category management. */
+/* Explicitly ensure CoreAudio is enabled (also set by config_site_sample.h). */
 #define PJMEDIA_AUDIO_DEV_HAS_COREAUDIO 1
 
-/* Enable iOS-specific audio routing behavior. */
+/* Disable alternative audio backends. */
 #define PJMEDIA_AUDIO_DEV_HAS_PORTAUDIO 0
 #define PJMEDIA_AUDIO_DEV_HAS_WMME      0
 
-/* iOS background audio — configure the audio session category to allow
- * VoIP audio to continue while the app is in the background. */
-#define PJ_IPHONE_OS_HAS_MULTITASKING_SUPPORT  1
+/* iOS background audio — use PushKit for modern iOS (13+).
+ * Setting to 0 prevents PJSIP from maintaining background sockets
+ * which can interfere with iOS audio session management. */
+#define PJ_IPHONE_OS_HAS_MULTITASKING_SUPPORT  0
 
 /* Enable activation of the iOS audio session on incoming calls. */
 #define PJSUA_DETECT_MERGED_REQUESTS    1
-
-/* Configure the audio session to handle route changes (e.g., headphones
- * plugged/unplugged, Bluetooth connects). */
-#define PJMEDIA_AUDIO_DEV_HAS_IOS_BGAUDIO  1
 
 /* ---------------------------------------------------------------------------
  * Performance / size optimizations
@@ -101,12 +111,5 @@
  * -------------------------------------------------------------------------*/
 
 #define PJSIP_HAS_TLS_TRANSPORT        1
-
-/* ---------------------------------------------------------------------------
- * iOS-specific flags
- * -------------------------------------------------------------------------*/
-
-/* Mark this as an iPhone build so pjlib uses the correct APIs. */
-#define PJ_CONFIG_IPHONE               1
 
 #endif /* __PJ_CONFIG_SITE_H__ */

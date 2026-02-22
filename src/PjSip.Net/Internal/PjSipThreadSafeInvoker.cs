@@ -72,7 +72,17 @@ internal sealed class PjSipThreadSafeInvoker : IDisposable
         {
             foreach (var action in _workQueue.GetConsumingEnumerable(_cts.Token))
             {
-                action();
+                try
+                {
+                    action();
+                }
+                catch (Exception ex)
+                {
+                    // Fire-and-forget actions must not kill the worker thread.
+                    // InvokeAsync actions handle exceptions via TaskCompletionSource,
+                    // but Invoke (fire-and-forget) has no such handler — catch here.
+                    System.Diagnostics.Debug.WriteLine($"PjSip-Worker: unhandled exception in queued action: {ex}");
+                }
             }
         }
         catch (OperationCanceledException)
