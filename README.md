@@ -13,8 +13,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE.txt)
 [![.NET 10](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet)](https://dotnet.microsoft.com/)
 
-Based on [PJSIP 2.16](https://www.pjsip.org/) with native TLS support (Schannel on Windows)
-Compatible with **WinForms** · **WPF** · **MAUI** · **Console**
+Based on [PJSIP 2.16](https://www.pjsip.org/) with native TLS support (Schannel on Windows, OpenSSL on Android)
+Compatible with **WinForms** · **WPF** · **MAUI** · **Mac Catalyst** · **Console**
 
 </div>
 
@@ -274,7 +274,7 @@ options.Transports.Add(new SipTransportOptions
 
 > **Windows:** TLS uses Schannel (OS native). No need to install OpenSSL.
 > **macOS/iOS:** Uses system Secure Transport.
-> **Android:** SSL is currently disabled. To enable: build OpenSSL for Android and set `PJ_HAS_SSL_SOCK=1` in config_site.h.
+> **Android:** TLS enabled via OpenSSL 3.4.1 (statically linked).
 
 ### 🌐 NAT/STUN/ICE/TURN
 
@@ -1858,7 +1858,8 @@ graph TB
 | <img src="https://img.shields.io/badge/Windows-0078D6?logo=windows&logoColor=white" alt="Windows" /> | `win-x64` | Schannel | `PjSip.Net.Native.Win64` |
 | <img src="https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white" alt="macOS" /> x64 | `osx-x64` | Apple SSL | `PjSip.Net.Native.MacOS` |
 | <img src="https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white" alt="macOS" /> ARM64 | `osx-arm64` | Apple SSL | `PjSip.Net.Native.MacOS` |
-| <img src="https://img.shields.io/badge/Android-3DDC84?logo=android&logoColor=white" alt="Android" /> ARM64 | `android-arm64` | Disabled | `PjSip.Net.Native.Android` |
+| <img src="https://img.shields.io/badge/Mac_Catalyst-000000?logo=apple&logoColor=white" alt="Mac Catalyst" /> | `osx-arm64` / `osx-x64` | Apple SSL | `PjSip.Net.Native.MacOS` |
+| <img src="https://img.shields.io/badge/Android-3DDC84?logo=android&logoColor=white" alt="Android" /> ARM64 | `android-arm64` | OpenSSL 3.4.1 | `PjSip.Net.Native.Android` |
 | <img src="https://img.shields.io/badge/iOS-000000?logo=ios&logoColor=white" alt="iOS" /> ARM64 | `ios-arm64` | Secure Transport | `PjSip.Net.Native.iOS` |
 
 ---
