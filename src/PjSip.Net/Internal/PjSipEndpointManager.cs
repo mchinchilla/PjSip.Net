@@ -195,7 +195,23 @@ internal sealed class PjSipEndpointManager : IDisposable
 
         try
         {
+            // Invoke the platform callback so the app can (re-)activate
+            // AVAudioSession before PJSIP opens the AudioUnit.
+            try
+            {
+                _options.OnAudioDeviceActivation?.Invoke();
+            }
+            catch (Exception cbEx)
+            {
+                _logger.LogWarning(cbEx, "iOS: OnAudioDeviceActivation callback failed");
+            }
+
             var audMgr = _endpoint.audDevManager();
+
+            // Refresh device list so PJSIP picks up any route changes
+            try { audMgr.refreshDevs(); }
+            catch (Exception rdEx) { _logger.LogDebug(rdEx, "iOS: refreshDevs failed (non-fatal)"); }
+
             audMgr.setCaptureDev(0);
             audMgr.setPlaybackDev(0);
             _logger.LogInformation("iOS: switched to real CoreAudio device successfully");

@@ -13,4 +13,11 @@ public sealed class SipPhoneOptions
     public bool UseCompactForm { get; set; }
     public NatOptions Nat { get; set; } = new();
     public int CallHistoryMaxEntries { get; set; } = 1000;
+
+    /// <summary>
+    /// Optional callback invoked on iOS just before PJSIP opens the real
+    /// CoreAudio device. Use this to (re-)activate the platform audio session
+    /// (e.g. AVAudioSession) so that VoiceProcessingIO can initialize.
+    /// </summary>
+    public Action? OnAudioDeviceActivation { get; set; }
 }

@@ -464,13 +464,16 @@ jobs:
           CC="$TOOLCHAIN/bin/aarch64-linux-android28-clang++"
           pj_libs=$(find "$GITHUB_WORKSPACE/pjproject" -name "*.a" -path "*/lib/*" | tr '\n' ' ')
           echo "Linking with: $pj_libs"
+          # Link bcg729 statically (use .a directly, not -lbcg729 which may pick up .so)
           $CC -shared -o libpjsua2.so \
               pjsua2_wrap.o \
               $pj_libs \
-              -L"$GITHUB_WORKSPACE/bcg729-install/lib" -lbcg729 \
+              "$GITHUB_WORKSPACE/bcg729-install/lib/libbcg729.a" \
               -L"$GITHUB_WORKSPACE/openssl-install/lib" -lssl -lcrypto \
               -lOpenSLES -llog -landroid \
               -latomic -lm
+          echo "=== Verify no dynamic bcg729 dependency ==="
+          readelf -d libpjsua2.so | grep -i bcg729 && echo "ERROR: bcg729 still dynamic!" && exit 1 || echo "OK: bcg729 statically linked"
 
       - name: Copy to runtimes
         run: |
