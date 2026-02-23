@@ -1875,7 +1875,7 @@ graph TB
 ### Compilar la solución managed
 
 ```bash
-dotnet build netpjsip.slnx
+dotnet build PjSip.Net.slnx
 dotnet test tests/PjSip.Net.Tests.Unit/PjSip.Net.Tests.Unit.csproj
 ```
 
