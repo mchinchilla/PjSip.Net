@@ -470,7 +470,7 @@ jobs:
               $pj_libs \
               "$GITHUB_WORKSPACE/bcg729-install/lib/libbcg729.a" \
               -L"$GITHUB_WORKSPACE/openssl-install/lib" -lssl -lcrypto \
-              -lOpenSLES -llog -landroid \
+              -lOpenSLES -lmediandk -llog -landroid \
               -latomic -lm
           echo "=== Verify no unwanted dynamic dependencies ==="
           readelf -d libpjsua2.so | grep NEEDED
