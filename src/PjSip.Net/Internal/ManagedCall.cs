@@ -472,6 +472,14 @@ internal sealed class ManagedCall : ISipCall
         if (newState == SipCallState.Confirmed && _connectTime == default)
             _connectTime = DateTime.UtcNow;
 
+        // On iOS, restore null sound device after call disconnect so the next
+        // makeCall succeeds. Without this, the audio subsystem can be left in
+        // a corrupted state that prevents subsequent calls.
+        if (newState == SipCallState.Disconnected && _endpointManager.IsIOS)
+        {
+            _endpointManager.Invoker.Invoke(() => _endpointManager.RestoreNullDeviceIfIOS());
+        }
+
         SetState(newState);
     }
 
@@ -503,12 +511,23 @@ internal sealed class ManagedCall : ISipCall
                             var ep = _endpointManager.Endpoint;
                             if (ep is not null && audioMedia is not null)
                             {
+                                // On iOS, try switching from null device to real CoreAudio.
+                                // If it fails, we keep the null device — call stays connected
+                                // but without real audio (better than crashing).
+                                if (_endpointManager.IsIOS)
+                                {
+                                    _endpointManager.TrySwitchToRealAudioDevice();
+                                }
+
                                 var audMgr = ep.audDevManager();
+
                                 var playMedia = audMgr.getPlaybackDevMedia();
                                 var capMedia = audMgr.getCaptureDevMedia();
 
                                 audioMedia.startTransmit(playMedia);
                                 capMedia.startTransmit(audioMedia);
+
+                                _logger.LogInformation("Media connected to sound device for call {CallId}", Id);
                             }
                         }
                         catch (Exception ex)
@@ -562,6 +581,13 @@ internal sealed class ManagedCall : ISipCall
 
         _native?.Dispose();
         _native = null;
+
+        // Safety net: restore null device on iOS even if onCallState never
+        // fired DISCONNECTED (e.g. if native hangup threw an exception).
+        if (_endpointManager.IsIOS)
+        {
+            _endpointManager.Invoker.Invoke(() => _endpointManager.RestoreNullDeviceIfIOS());
+        }
     }
 
     /// <summary>

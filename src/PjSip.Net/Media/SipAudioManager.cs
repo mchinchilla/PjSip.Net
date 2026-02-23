@@ -68,6 +68,16 @@ internal sealed class SipAudioManager : ISipAudioManager
 
     public void SetInputDevice(int deviceId)
     {
+        // On iOS, audio device is managed via null device + on-demand open in
+        // OnNativeMediaState. Calling setCaptureDev() outside of an active call
+        // breaks the null device setup and causes makeCall to fail.
+        if (OperatingSystem.IsIOS() && !OperatingSystem.IsMacCatalyst())
+        {
+            _logger.LogDebug("iOS: skipping SetInputDevice({DeviceId}) — managed via null device", deviceId);
+            CurrentInputDevice = new AudioDeviceInfo { DeviceId = deviceId, Name = "iPhone IO device" };
+            return;
+        }
+
         var ep = _endpointManager.Endpoint;
         if (ep is not null)
         {
@@ -100,6 +110,16 @@ internal sealed class SipAudioManager : ISipAudioManager
 
     public void SetOutputDevice(int deviceId)
     {
+        // On iOS, audio device is managed via null device + on-demand open in
+        // OnNativeMediaState. Calling setPlaybackDev() outside of an active call
+        // breaks the null device setup and causes makeCall to fail.
+        if (OperatingSystem.IsIOS() && !OperatingSystem.IsMacCatalyst())
+        {
+            _logger.LogDebug("iOS: skipping SetOutputDevice({DeviceId}) — managed via null device", deviceId);
+            CurrentOutputDevice = new AudioDeviceInfo { DeviceId = deviceId, Name = "iPhone IO device" };
+            return;
+        }
+
         var ep = _endpointManager.Endpoint;
         if (ep is not null)
         {

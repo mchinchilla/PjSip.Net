@@ -35,6 +35,7 @@ internal sealed class PjSipEndpointManager : IDisposable
 
     internal PjSipThreadSafeInvoker Invoker => _invoker;
     internal PjSipManagedEndpoint? Endpoint => _endpoint;
+    internal bool IsIOS => OperatingSystem.IsIOS() && !OperatingSystem.IsMacCatalyst();
 
     internal event EventHandler<TransportStateChangedEventArgs>? TransportStateChanged;
 
@@ -98,28 +99,23 @@ internal sealed class PjSipEndpointManager : IDisposable
 
             _endpoint.libStart();
 
-            // On iOS, the native library may not have been built with
-            // configure-iphone so the CoreAudio iOS backend is unavailable.
-            // Use null sound device to keep calls stable (SIP signaling works,
-            // audio will work once the native dylib is rebuilt with configure-iphone).
+            // On iOS, PJSIP tries to open the CoreAudio device during makeCall
+            // which fails with error -2002889396 if the AudioUnit can't start.
+            // Use null sound device at init so makeCall succeeds (SIP signaling works),
+            // then switch to real device when media becomes active.
             if (OperatingSystem.IsIOS() && !OperatingSystem.IsMacCatalyst())
             {
                 try
                 {
                     var devCount = _endpoint.audDevManager().enumDev2().Count;
-                    _logger.LogInformation("iOS: {DeviceCount} audio device(s) found", devCount);
-                    if (devCount == 0)
-                    {
-                        _logger.LogWarning("iOS: no audio devices — using null sound device");
-                        _endpoint.audDevManager().setNullDev();
-                    }
+                    _logger.LogInformation("iOS: {DeviceCount} audio device(s) found — using null sound device at init", devCount);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "iOS: audio device enumeration failed — using null sound device");
-                    try { _endpoint.audDevManager().setNullDev(); }
-                    catch (Exception ex2) { _logger.LogError(ex2, "iOS: setNullDev also failed"); }
+                    _logger.LogWarning(ex, "iOS: audio device enumeration failed");
                 }
+                try { _endpoint.audDevManager().setNullDev(); }
+                catch (Exception ex) { _logger.LogError(ex, "iOS: setNullDev failed"); }
             }
 
             _initialized = true;
@@ -163,6 +159,57 @@ internal sealed class PjSipEndpointManager : IDisposable
             _initialized = false;
             _logger.LogInformation("PJSIP endpoint shut down");
         });
+    }
+
+    /// <summary>
+    /// On iOS, re-establishes the null sound device after a call disconnects.
+    /// This ensures the next makeCall succeeds (null device provides the
+    /// conference bridge clock without opening CoreAudio).
+    /// Must be called on the PJSIP worker thread.
+    /// </summary>
+    internal void RestoreNullDeviceIfIOS()
+    {
+        if (!IsIOS || _endpoint is null) return;
+
+        try
+        {
+            _endpoint.audDevManager().setNullDev();
+            _logger.LogDebug("iOS: null sound device restored after call disconnect");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "iOS: failed to restore null sound device");
+        }
+    }
+
+    /// <summary>
+    /// On iOS, attempts to switch from null device to real CoreAudio device.
+    /// Returns true if successful, false if CoreAudio couldn't open (in which
+    /// case the null device remains active — media will still connect but with
+    /// no real audio).
+    /// Must be called on the PJSIP worker thread.
+    /// </summary>
+    internal bool TrySwitchToRealAudioDevice()
+    {
+        if (!IsIOS || _endpoint is null) return false;
+
+        try
+        {
+            var audMgr = _endpoint.audDevManager();
+            audMgr.setCaptureDev(0);
+            audMgr.setPlaybackDev(0);
+            _logger.LogInformation("iOS: switched to real CoreAudio device successfully");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "iOS: failed to switch to real CoreAudio device — continuing with null device (no audio)");
+            // Re-establish null device since the failed attempt may have left
+            // the audio subsystem in a bad state
+            try { _endpoint.audDevManager().setNullDev(); }
+            catch (Exception ex2) { _logger.LogError(ex2, "iOS: failed to re-establish null device after real device switch failure"); }
+            return false;
+        }
     }
 
     private void CreateTransport(SipTransportOptions transportOpt)
