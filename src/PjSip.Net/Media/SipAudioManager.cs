@@ -153,7 +153,11 @@ internal sealed class SipAudioManager : ISipAudioManager
     private IReadOnlyList<AudioDeviceInfo> EnumerateDevices(bool input)
     {
         var ep = _endpointManager.Endpoint;
-        if (ep is null) return [];
+        if (ep is null)
+        {
+            _logger.LogDebug("EnumerateDevices({Input}): endpoint is null, returning empty", input ? "input" : "output");
+            return [];
+        }
 
         return Invoker.InvokeAsync(() =>
         {
@@ -161,9 +165,13 @@ internal sealed class SipAudioManager : ISipAudioManager
             var audMgr = ep.audDevManager();
             var devList = audMgr.enumDev2();
 
+            _logger.LogDebug("EnumerateDevices({Input}): enumDev2 returned {Count} device(s)", input ? "input" : "output", devList.Count);
+
             for (int i = 0; i < devList.Count; i++)
             {
                 var dev = devList[i];
+                _logger.LogDebug("  Device[{Index}]: name={Name}, driver={Driver}, in={InputCount}, out={OutputCount}",
+                    i, dev.name, dev.driver, dev.inputCount, dev.outputCount);
                 bool matches = input ? dev.inputCount > 0 : dev.outputCount > 0;
                 if (matches)
                 {
@@ -178,6 +186,7 @@ internal sealed class SipAudioManager : ISipAudioManager
                 }
             }
 
+            _logger.LogDebug("EnumerateDevices({Input}): returning {Count} matching device(s)", input ? "input" : "output", devices.Count);
             return (IReadOnlyList<AudioDeviceInfo>)devices;
         }).GetAwaiter().GetResult();
     }

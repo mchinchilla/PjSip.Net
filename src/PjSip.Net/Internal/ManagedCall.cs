@@ -579,14 +579,31 @@ internal sealed class ManagedCall : ISipCall
             }
         }
 
-        _native?.Dispose();
-        _native = null;
-
-        // Safety net: restore null device on iOS even if onCallState never
-        // fired DISCONNECTED (e.g. if native hangup threw an exception).
-        if (_endpointManager.IsIOS)
+        // The SWIG Call destructor calls native PJSIP APIs that require the
+        // calling thread to be registered with pjlib. Dispatch to the PJSIP
+        // worker thread to avoid SIGABRT from pj_thread_this() assertion.
+        if (_native is not null)
         {
-            _endpointManager.Invoker.Invoke(() => _endpointManager.RestoreNullDeviceIfIOS());
+            var native = _native;
+            _native = null;
+            try
+            {
+                void DisposeNative()
+                {
+                    native.Dispose();
+                    if (_endpointManager.IsIOS)
+                        _endpointManager.RestoreNullDeviceIfIOS();
+                }
+
+                if (_endpointManager.Invoker.IsOnPjThread)
+                    DisposeNative();
+                else
+                    _endpointManager.Invoker.InvokeAsync(DisposeNative).GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error disposing native call {CallId}", Id);
+            }
         }
     }
 

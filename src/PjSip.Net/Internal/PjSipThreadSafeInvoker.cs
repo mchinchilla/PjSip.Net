@@ -23,6 +23,12 @@ internal sealed class PjSipThreadSafeInvoker : IDisposable
         _pjThread.Start();
     }
 
+    /// <summary>
+    /// Returns true if the current thread is the PJSIP worker thread.
+    /// Used to avoid deadlocks when Dispose code needs to run on the worker.
+    /// </summary>
+    internal bool IsOnPjThread => Thread.CurrentThread == _pjThread;
+
     public void Invoke(Action action)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);

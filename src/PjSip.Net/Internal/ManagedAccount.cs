@@ -300,8 +300,25 @@ internal sealed class ManagedAccount : ISipAccount
             _activeCalls.Clear();
         }
 
-        _native?.Dispose();
-        _native = null;
+        // The SWIG Account destructor calls pjsua_acc_del which requires the
+        // calling thread to be registered with pjlib. Dispatch to the PJSIP
+        // worker thread to avoid SIGABRT from pj_thread_this() assertion.
+        if (_native is not null)
+        {
+            var native = _native;
+            _native = null;
+            try
+            {
+                if (_endpointManager.Invoker.IsOnPjThread)
+                    native.Dispose();
+                else
+                    _endpointManager.Invoker.InvokeAsync(() => native.Dispose()).GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error disposing native account");
+            }
+        }
     }
 
     /// <summary>
