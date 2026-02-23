@@ -25,6 +25,6 @@
 
     <!-- Versioning -->
     <VersionPrefix>1.0.0</VersionPrefix>
-    <VersionSuffix>rc.11</VersionSuffix>
+    <VersionSuffix>rc.12</VersionSuffix>
   </PropertyGroup>
 </Project>
