@@ -25,7 +25,7 @@ Compatible con **WinForms** · **WPF** · **MAUI** · **Mac Catalyst** · **Cons
 | | Característica | Descripción |
 |---|---|---|
 | 📞 | **Gestión de Llamadas** | Realizar, recibir, retener, transferir y grabar llamadas |
-| 🔒 | **TLS Nativo** | Schannel (Windows), Secure Transport (macOS/iOS) — sin necesidad de OpenSSL |
+| 🔒 | **TLS Nativo** | Schannel (Windows), Secure Transport (macOS/iOS), OpenSSL (Android) |
 | 👥 | **Presencia y BLF** | Monitorear disponibilidad de usuarios con SUBSCRIBE/NOTIFY |
 | 🎙️ | **Control de Audio** | Selección de dispositivo, volumen, silencio, gestión de codecs (G.711, G.729, Opus, Speex, GSM, iLBC) |
 | 🔀 | **Conferencia** | Puente de audio multi-participante con merge/split |
