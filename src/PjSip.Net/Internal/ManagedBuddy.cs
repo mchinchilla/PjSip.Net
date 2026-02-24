@@ -217,6 +217,7 @@ internal sealed class ManagedBuddy : ISipBuddy
     {
         if (_disposed) return;
         _disposed = true;
+        GC.SuppressFinalize(this);
 
         if (_native is not null && State is not BuddyState.Offline and not BuddyState.Unknown)
         {
@@ -235,8 +236,43 @@ internal sealed class ManagedBuddy : ISipBuddy
             }
         }
 
-        _native?.Dispose();
+        // The SWIG Buddy destructor calls native PJSIP APIs that require the
+        // calling thread to be registered with pjlib. Dispatch to the PJSIP
+        // worker thread to avoid SIGABRT from pj_mutex_trylock() assertion.
+        if (_native is not null)
+        {
+            var native = _native;
+            _native = null;
+            try
+            {
+                if (_endpointManager.Invoker.IsOnPjThread)
+                    native.Dispose();
+                else
+                    _endpointManager.Invoker.InvokeAsync(() => native.Dispose()).GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error disposing native buddy {Uri}", Uri);
+            }
+        }
+    }
+
+    ~ManagedBuddy()
+    {
+        if (_disposed || _native is null) return;
+        _disposed = true;
+
+        // GC Finalizer thread is not registered with pjlib — must dispatch.
+        var native = _native;
         _native = null;
+        try
+        {
+            _endpointManager.Invoker.Invoke(() => native.Dispose());
+        }
+        catch
+        {
+            // Best-effort during finalization; invoker may already be disposed.
+        }
     }
 
     /// <summary>

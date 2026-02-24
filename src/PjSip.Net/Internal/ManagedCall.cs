@@ -585,6 +585,7 @@ internal sealed class ManagedCall : ISipCall
     {
         if (_disposed) return;
         _disposed = true;
+        GC.SuppressFinalize(this);
 
         if (State is not SipCallState.Disconnected and not SipCallState.Null)
         {
@@ -620,6 +621,26 @@ internal sealed class ManagedCall : ISipCall
             {
                 _logger.LogWarning(ex, "Error disposing native call {CallId}", Id);
             }
+        }
+    }
+
+    ~ManagedCall()
+    {
+        if (_disposed || _native is null) return;
+        _disposed = true;
+
+        // GC Finalizer thread is not registered with pjlib — dispatching
+        // native disposal to the PJSIP worker thread prevents SIGABRT
+        // from pj_thread_this() assertion failure.
+        var native = _native;
+        _native = null;
+        try
+        {
+            _endpointManager.Invoker.Invoke(() => native.Dispose());
+        }
+        catch
+        {
+            // Best-effort during finalization; invoker may already be disposed.
         }
     }
 
