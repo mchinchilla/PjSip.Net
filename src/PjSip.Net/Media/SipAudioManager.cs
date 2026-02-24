@@ -23,6 +23,8 @@ internal sealed class SipAudioManager : ISipAudioManager
     public AudioDeviceInfo? CurrentInputDevice { get; private set; }
     public AudioDeviceInfo? CurrentOutputDevice { get; private set; }
 
+    public event EventHandler<AudioRouteChangedEventArgs>? AudioRouteChanged;
+
     public float InputLevel
     {
         get => _inputLevel;
@@ -274,6 +276,32 @@ internal sealed class SipAudioManager : ISipAudioManager
             {
                 _logger.LogDebug(ex, "Failed to adjust output level — no active media or endpoint not ready");
             }
+        });
+    }
+
+    public void NotifyAudioRouteChanged(string reason, string? newDeviceName = null)
+    {
+        _logger.LogInformation("Audio route changed: reason={Reason}, newDevice={Device}",
+            reason, newDeviceName ?? "(system default)");
+
+        // Invalidate cached device lists so next enumeration picks up changes
+        RefreshDevices();
+
+        // Also tell PJSIP to refresh its native device list
+        var ep = _endpointManager.Endpoint;
+        if (ep is not null)
+        {
+            Invoker.Invoke(() =>
+            {
+                try { ep.audDevManager().refreshDevs(); }
+                catch (Exception ex) { _logger.LogDebug(ex, "refreshDevs failed during route change (non-fatal)"); }
+            });
+        }
+
+        AudioRouteChanged?.Invoke(this, new AudioRouteChangedEventArgs
+        {
+            Reason = reason,
+            NewDeviceName = newDeviceName
         });
     }
 }
