@@ -95,13 +95,33 @@ internal sealed class ManagedAccount : ISipAccount
 
             using var acfg = new AccountConfig();
             var sipUser = Options.Username.Replace("@", "%40");
+            var tlsSuffix = Options.UseTls ? ";transport=tls" : "";
+
             acfg.idUri = Options.DisplayName is not null
                 ? $"\"{Options.DisplayName}\" <sip:{sipUser}@{Options.Domain}>"
                 : $"sip:{sipUser}@{Options.Domain}";
 
-            // Registration config
-            acfg.regConfig.registrarUri = Options.Registrar ?? $"sip:{Options.Domain}";
+            // Registration config — ensure registrar URI has sip: or sips: scheme
+            var registrar = Options.Registrar ?? Options.Domain;
+            if (!registrar.StartsWith("sip:", StringComparison.OrdinalIgnoreCase) &&
+                !registrar.StartsWith("sips:", StringComparison.OrdinalIgnoreCase))
+            {
+                registrar = $"sip:{registrar}";
+            }
+            acfg.regConfig.registrarUri = $"{registrar}{tlsSuffix}";
             acfg.regConfig.timeoutSec = (uint)Options.RegistrationTimeout;
+
+            // Outbound proxy
+            if (!string.IsNullOrEmpty(Options.OutboundProxy))
+            {
+                var proxy = Options.OutboundProxy;
+                if (!proxy.StartsWith("sip:", StringComparison.OrdinalIgnoreCase) &&
+                    !proxy.StartsWith("sips:", StringComparison.OrdinalIgnoreCase))
+                {
+                    proxy = $"sip:{proxy}";
+                }
+                acfg.sipConfig.proxies.Add($"{proxy}{tlsSuffix}");
+            }
 
             // Auth credentials
             var cred = new AuthCredInfo(

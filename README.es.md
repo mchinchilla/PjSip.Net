@@ -193,10 +193,12 @@ new SipAccountOptions
     Password = "secret",                     // Contraseña (obligatorio)
     Domain = "pbx.miempresa.com",           // Dominio SIP (obligatorio)
     Registrar = "sip:pbx.miempresa.com",    // URI del registrar (null = usa Domain)
+    OutboundProxy = "sip:proxy.miempresa.com", // Proxy de salida (null = ninguno)
     DisplayName = "Juan Pérez",             // Nombre para mostrar en caller ID
     Realm = "*",                             // Realm de autenticación (null = automático)
     RegistrationTimeout = 300,               // Expiración del registro en segundos (default: 300)
-    RegisterOnAdd = true                     // Registrar automáticamente al agregar (default: true)
+    RegisterOnAdd = true,                    // Registrar automáticamente al agregar (default: true)
+    UseTls = false                           // Agregar ;transport=tls a URIs de registrar/proxy (default: false)
 }
 ```
 
@@ -206,10 +208,12 @@ new SipAccountOptions
 | `Password` | `string` | *requerido* | Contraseña de la cuenta |
 | `Domain` | `string` | *requerido* | Dominio/servidor SIP |
 | `Registrar` | `string?` | `null` | URI completa del registrar. Si es `null`, se construye desde `Domain` |
+| `OutboundProxy` | `string?` | `null` | URI del proxy SIP de salida. El esquema (`sip:`/`sips:`) se agrega automáticamente si falta |
 | `DisplayName` | `string?` | `null` | Nombre visible en el Caller ID |
 | `Realm` | `string?` | `null` | Realm para digest auth. `null` = acepta cualquier challenge |
 | `RegistrationTimeout` | `int` | `300` | Tiempo de expiración del REGISTER en segundos |
 | `RegisterOnAdd` | `bool` | `true` | Si `true`, envía REGISTER automáticamente al agregar la cuenta |
+| `UseTls` | `bool` | `false` | Agrega `;transport=tls` a las URIs del registrar y proxy |
 
 ### 🔐 Transporte y TLS
 
