@@ -1909,6 +1909,10 @@ dotnet pack src/PjSip.Net.Native.Win64/PjSip.Net.Native.Win64.csproj -o ./artifa
 
 ## 📝 Changelog
 
+### v1.0.3
+
+- **Feature:** Account-specific buddy subscriptions — `AddBuddy(uri, account)` overload allows binding presence subscriptions to a specific SIP account instead of always using the primary account
+
 ### v1.0.2
 
 - **Fix:** Populate `RemoteDisplayName` on incoming calls — the display name from the SIP `From` header is now correctly extracted when the call is first created

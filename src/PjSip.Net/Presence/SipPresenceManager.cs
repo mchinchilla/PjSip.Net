@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using PjSip.Net.Accounts;
 using PjSip.Net.Events;
 using PjSip.Net.Internal;
 using PjSip.Net.Interop.Generated;
@@ -56,14 +57,26 @@ internal sealed class SipPresenceManager : ISipPresenceManager
 
     public ISipBuddy AddBuddy(string uri)
     {
+        return AddBuddyInternal(uri, _primaryAccount);
+    }
+
+    public ISipBuddy AddBuddy(string uri, ISipAccount account)
+    {
+        var managed = (account as SipAccount)?.Inner;
+        return AddBuddyInternal(uri, managed ?? _primaryAccount);
+    }
+
+    private ISipBuddy AddBuddyInternal(string uri, ManagedAccount? account)
+    {
         var buddy = new ManagedBuddy(uri, _endpointManager, _logger);
-        if (_primaryAccount is not null)
-            buddy.SetAccount(_primaryAccount);
+        if (account is not null)
+            buddy.SetAccount(account);
 
         lock (_lock) _buddies.Add(buddy);
         buddy.StateChanged += OnBuddyStateChanged;
 
-        _logger.LogInformation("Added buddy {Uri}, starting presence subscription", uri);
+        _logger.LogInformation("Added buddy {Uri} (account={Account}), starting presence subscription",
+            uri, account?.Uri ?? "none");
 
         _ = SubscribeBuddyAsync(buddy);
 
