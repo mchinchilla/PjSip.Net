@@ -529,6 +529,21 @@ internal sealed class ManagedCall : ISipCall
                                 audioMedia.startTransmit(playMedia);
                                 capMedia.startTransmit(audioMedia);
 
+                                // Log the actual audio devices in use
+                                try
+                                {
+                                    var capId = audMgr.getCaptureDev();
+                                    var playId = audMgr.getPlaybackDev();
+                                    var capInfo = audMgr.getDevInfo(capId);
+                                    var playInfo = audMgr.getDevInfo(playId);
+                                    _logger.LogInformation("AUDIO IN:  [{CapId}] {CapName}", capId, capInfo.name);
+                                    _logger.LogInformation("AUDIO OUT: [{PlayId}] {PlayName}", playId, playInfo.name);
+                                }
+                                catch (Exception devEx)
+                                {
+                                    _logger.LogDebug(devEx, "Could not log audio device info for call {CallId}", Id);
+                                }
+
                                 _logger.LogInformation("Media connected to sound device for call {CallId}", Id);
                             }
                         }

@@ -8,6 +8,8 @@ public interface ISipAudioManager
     AudioDeviceInfo? CurrentOutputDevice { get; }
     void SetInputDevice(int deviceId);
     void SetOutputDevice(int deviceId);
+    bool SetInputDeviceByName(string deviceName);
+    bool SetOutputDeviceByName(string deviceName);
     float InputLevel { get; set; }
     float OutputLevel { get; set; }
 }

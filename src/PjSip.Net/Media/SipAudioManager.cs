@@ -108,6 +108,54 @@ internal sealed class SipAudioManager : ISipAudioManager
         }
     }
 
+    public bool SetInputDeviceByName(string deviceName)
+    {
+        if (string.IsNullOrEmpty(deviceName)) return false;
+
+        var devices = GetInputDevices();
+        // Exact match first (case-insensitive)
+        var match = devices.FirstOrDefault(d =>
+            string.Equals(d.Name, deviceName, StringComparison.OrdinalIgnoreCase));
+        // Fallback to contains match
+        match ??= devices.FirstOrDefault(d =>
+            d.Name.Contains(deviceName, StringComparison.OrdinalIgnoreCase));
+
+        if (match is null)
+        {
+            _logger.LogWarning("SetInputDeviceByName: no device matching '{DeviceName}' found", deviceName);
+            return false;
+        }
+
+        _logger.LogInformation("Resolved input device '{DeviceName}' → ID {DeviceId} ('{ActualName}')",
+            deviceName, match.DeviceId, match.Name);
+        SetInputDevice(match.DeviceId);
+        return true;
+    }
+
+    public bool SetOutputDeviceByName(string deviceName)
+    {
+        if (string.IsNullOrEmpty(deviceName)) return false;
+
+        var devices = GetOutputDevices();
+        // Exact match first (case-insensitive)
+        var match = devices.FirstOrDefault(d =>
+            string.Equals(d.Name, deviceName, StringComparison.OrdinalIgnoreCase));
+        // Fallback to contains match
+        match ??= devices.FirstOrDefault(d =>
+            d.Name.Contains(deviceName, StringComparison.OrdinalIgnoreCase));
+
+        if (match is null)
+        {
+            _logger.LogWarning("SetOutputDeviceByName: no device matching '{DeviceName}' found", deviceName);
+            return false;
+        }
+
+        _logger.LogInformation("Resolved output device '{DeviceName}' → ID {DeviceId} ('{ActualName}')",
+            deviceName, match.DeviceId, match.Name);
+        SetOutputDevice(match.DeviceId);
+        return true;
+    }
+
     public void SetOutputDevice(int deviceId)
     {
         // On iOS, audio device is managed via null device + on-demand open in
