@@ -1907,6 +1907,24 @@ dotnet pack src/PjSip.Net.Native.Win64/PjSip.Net.Native.Win64.csproj -o ./artifa
 
 ---
 
+## 📝 Changelog
+
+### v1.0.2
+
+- **Fix:** Populate `RemoteDisplayName` on incoming calls — the display name from the SIP `From` header is now correctly extracted when the call is first created
+- **Fix:** Preserve `RemoteDisplayName` across call state updates — on `onCallState` callbacks, the display name is retained even if the native `CallInfo` no longer includes it
+
+### v1.0.1
+
+- **Feature:** Outbound proxy support (`SipAccountOptions.OutboundProxy`)
+- **Feature:** TLS transport suffix — automatic `;transport=tls` append via `SipAccountOptions.UseTls`
+
+### v1.0.0
+
+- First stable production release
+
+---
+
 ## 📄 License
 
 MIT

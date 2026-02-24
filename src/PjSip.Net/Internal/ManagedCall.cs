@@ -80,7 +80,8 @@ internal sealed class ManagedCall : ISipCall
                     RemoteUri = ci.remoteUri,
                     LocalUri = ci.localUri,
                     State = MapCallState(ci.state),
-                    Direction = CallDirection.Incoming
+                    Direction = CallDirection.Incoming,
+                    RemoteDisplayName = ExtractDisplayName(ci.remoteUri)
                 };
                 State = MapCallState(ci.state);
             }
@@ -466,7 +467,8 @@ internal sealed class ManagedCall : ISipCall
             Direction = Direction,
             Duration = duration,
             StatusCode = (int)ci.lastStatusCode,
-            StatusText = ci.lastReason
+            StatusText = ci.lastReason,
+            RemoteDisplayName = ExtractDisplayName(ci.remoteUri) ?? Info.RemoteDisplayName
         };
 
         if (newState == SipCallState.Confirmed && _connectTime == default)
@@ -548,6 +550,20 @@ internal sealed class ManagedCall : ISipCall
         {
             _logger.LogWarning(ex, "Error handling media state for call {CallId}", Id);
         }
+    }
+
+    /// <summary>
+    /// Extracts the display name from a SIP URI of the form: "Display Name" &lt;sip:user@domain&gt;
+    /// Returns null if no display name is present.
+    /// </summary>
+    internal static string? ExtractDisplayName(string? uri)
+    {
+        if (string.IsNullOrEmpty(uri)) return null;
+        // Format: "Display Name" <sip:user@domain> or Display Name <sip:user@domain>
+        var ltIndex = uri.IndexOf('<');
+        if (ltIndex <= 0) return null;
+        var name = uri[..ltIndex].Trim().Trim('"').Trim();
+        return string.IsNullOrEmpty(name) ? null : name;
     }
 
     internal static SipCallState MapCallState(pjsip_inv_state state)
