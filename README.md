@@ -27,7 +27,7 @@ Compatible with **WinForms** · **WPF** · **MAUI** · **Mac Catalyst** · **Con
 | 📞 | **Call Management** | Make, receive, hold, transfer, and record calls |
 | 🔒 | **Native TLS** | Schannel (Windows), Secure Transport (macOS/iOS), OpenSSL (Android) |
 | 👥 | **Presence & BLF** | Monitor user availability with SUBSCRIBE/NOTIFY |
-| 🎙️ | **Audio Control** | Device selection, volume, mute, codec management (G.711, G.729, Opus, Speex, GSM, iLBC) |
+| 🎙️ | **Audio Control** | Device selection (by ID or name), mid-call switch, volume, mute, route change detection, codec management (G.711, G.729, Opus, Speex, GSM, iLBC) |
 | 🔀 | **Conferencing** | Multi-party audio bridge with merge/split |
 | 💬 | **SIP Messaging** | Send and receive text messages via SIP MESSAGE (RFC 3428) |
 | 📊 | **Call Quality** | Real-time RTP stats, jitter, packet loss, MOS score |
@@ -1944,6 +1944,42 @@ dotnet pack src/PjSip.Net.Native.Win64/PjSip.Net.Native.Win64.csproj -o ./artifa
 ---
 
 ## 📝 Changelog
+
+### v1.0.11
+
+- **Feature:** Native patch pipeline — `native/patches/` directory with automatic patch application in all build scripts (CI and local)
+- **Fix:** Disable VPIO (Voice Processing I/O) on macOS to allow independent capture/playback device selection
+
+### v1.0.10
+
+- **Cleanup:** Remove verbose diagnostics from `SetOutputDevice`, consolidate comments
+
+### v1.0.9
+
+- **Fix:** Always force sound device reopen via `setSndDevMode(0)` — `sndIsActive()` can return false even when media is connected through the conference bridge
+
+### v1.0.8
+
+- **Docs:** Update README and samples for new audio APIs (device-by-name, route changes, mid-call switch)
+
+### v1.0.7
+
+- **Fix:** Force immediate audio device reopen on mid-call switch — `SetInputDevice`/`SetOutputDevice` now take effect immediately during active calls
+
+### v1.0.6
+
+- **Feature:** Audio route change notifications — `AudioRouteChanged` event, `NotifyAudioRouteChanged()`, and `AudioRouteChangedEventArgs` on `ISipAudioManager`
+- **Feature:** `RefreshDevices()` to invalidate cached device lists and refresh PJSIP native device list
+
+### v1.0.5
+
+- **Feature:** `SetInputDeviceByName()`/`SetOutputDeviceByName()` — name-based device selection (exact then contains, case-insensitive)
+- **Improvement:** Log active capture/playback device names when media connects on a call
+
+### v1.0.4
+
+- **Fix:** Safe GC finalizers for `ManagedBuddy` and `ManagedCall` — dispatch native disposal to PJSIP worker thread to prevent SIGABRT on unregistered threads
+- **Fix:** Add `GC.SuppressFinalize(this)` in `Dispose()` for both classes
 
 ### v1.0.3
 

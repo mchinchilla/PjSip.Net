@@ -27,7 +27,7 @@ Compatible con **WinForms** · **WPF** · **MAUI** · **Mac Catalyst** · **Cons
 | 📞 | **Gestión de Llamadas** | Realizar, recibir, retener, transferir y grabar llamadas |
 | 🔒 | **TLS Nativo** | Schannel (Windows), Secure Transport (macOS/iOS), OpenSSL (Android) |
 | 👥 | **Presencia y BLF** | Monitorear disponibilidad de usuarios con SUBSCRIBE/NOTIFY |
-| 🎙️ | **Control de Audio** | Selección de dispositivo, volumen, silencio, gestión de codecs (G.711, G.729, Opus, Speex, GSM, iLBC) |
+| 🎙️ | **Control de Audio** | Selección de dispositivo (por ID o nombre), cambio durante llamada, volumen, silencio, detección de cambio de ruta, gestión de codecs (G.711, G.729, Opus, Speex, GSM, iLBC) |
 | 🔀 | **Conferencia** | Puente de audio multi-participante con merge/split |
 | 💬 | **Mensajería SIP** | Enviar y recibir mensajes de texto via SIP MESSAGE (RFC 3428) |
 | 📊 | **Calidad de Llamada** | Estadísticas RTP en tiempo real, jitter, pérdida de paquetes, MOS score |
@@ -1944,6 +1944,42 @@ dotnet pack src/PjSip.Net.Native.Win64/PjSip.Net.Native.Win64.csproj -o ./artifa
 ---
 
 ## 📝 Changelog
+
+### v1.0.11
+
+- **Feature:** Pipeline de patches nativos — directorio `native/patches/` con aplicación automática en todos los scripts de build (CI y local)
+- **Fix:** Deshabilitar VPIO (Voice Processing I/O) en macOS para permitir selección independiente de dispositivos de captura y reproducción
+
+### v1.0.10
+
+- **Cleanup:** Eliminar diagnósticos verbosos de `SetOutputDevice`, consolidar comentarios
+
+### v1.0.9
+
+- **Fix:** Forzar siempre reapertura del dispositivo de sonido via `setSndDevMode(0)` — `sndIsActive()` puede retornar false incluso con media conectada por el conference bridge
+
+### v1.0.8
+
+- **Docs:** Actualizar README y samples para nuevas APIs de audio (dispositivo por nombre, cambios de ruta, cambio durante llamada)
+
+### v1.0.7
+
+- **Fix:** Forzar reapertura inmediata del dispositivo de audio al cambiar durante llamada — `SetInputDevice`/`SetOutputDevice` ahora toman efecto inmediatamente durante llamadas activas
+
+### v1.0.6
+
+- **Feature:** Notificaciones de cambio de ruta de audio — evento `AudioRouteChanged`, `NotifyAudioRouteChanged()`, y `AudioRouteChangedEventArgs` en `ISipAudioManager`
+- **Feature:** `RefreshDevices()` para invalidar caché de dispositivos y refrescar lista nativa de PJSIP
+
+### v1.0.5
+
+- **Feature:** `SetInputDeviceByName()`/`SetOutputDeviceByName()` — selección de dispositivo por nombre (coincidencia exacta, luego parcial, case-insensitive)
+- **Mejora:** Log de dispositivos de captura/reproducción activos al conectar media en una llamada
+
+### v1.0.4
+
+- **Fix:** Finalizers seguros para `ManagedBuddy` y `ManagedCall` — despachar liberación nativa al thread de PJSIP para prevenir SIGABRT en threads no registrados
+- **Fix:** Agregar `GC.SuppressFinalize(this)` en `Dispose()` para ambas clases
 
 ### v1.0.3
 
