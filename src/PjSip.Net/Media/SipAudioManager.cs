@@ -87,8 +87,17 @@ internal sealed class SipAudioManager : ISipAudioManager
             {
                 try
                 {
-                    ep.audDevManager().setCaptureDev(deviceId);
-                    var devInfo = ep.audDevManager().getDevInfo(deviceId);
+                    var audMgr = ep.audDevManager();
+                    audMgr.setCaptureDev(deviceId);
+
+                    // Force immediate reopen if sound device is active (mid-call)
+                    if (audMgr.sndIsActive())
+                    {
+                        _logger.LogInformation("Sound device active — forcing immediate reopen for capture device {DeviceId}", deviceId);
+                        audMgr.setSndDevMode(0);
+                    }
+
+                    var devInfo = audMgr.getDevInfo(deviceId);
                     CurrentInputDevice = new AudioDeviceInfo
                     {
                         DeviceId = deviceId,
@@ -177,8 +186,21 @@ internal sealed class SipAudioManager : ISipAudioManager
             {
                 try
                 {
-                    ep.audDevManager().setPlaybackDev(deviceId);
-                    var devInfo = ep.audDevManager().getDevInfo(deviceId);
+                    var audMgr = ep.audDevManager();
+                    audMgr.setPlaybackDev(deviceId);
+
+                    // setPlaybackDev uses PJSUA_SND_DEV_NO_IMMEDIATE_OPEN, which
+                    // defers the device change until the next call. To switch the
+                    // audio device mid-call we must reopen the sound device now.
+                    // setSndDevMode(0) calls pjsua_set_snd_dev2 without the
+                    // NO_IMMEDIATE_OPEN flag, forcing an immediate close + reopen.
+                    if (audMgr.sndIsActive())
+                    {
+                        _logger.LogInformation("Sound device active — forcing immediate reopen for playback device {DeviceId}", deviceId);
+                        audMgr.setSndDevMode(0);
+                    }
+
+                    var devInfo = audMgr.getDevInfo(deviceId);
                     CurrentOutputDevice = new AudioDeviceInfo
                     {
                         DeviceId = deviceId,
