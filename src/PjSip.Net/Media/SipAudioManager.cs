@@ -184,29 +184,13 @@ internal sealed class SipAudioManager : ISipAudioManager
                 try
                 {
                     var audMgr = ep.audDevManager();
-                    var wasActive = audMgr.sndIsActive();
-                    var prevCapture = audMgr.getCaptureDev();
-                    var prevPlayback = audMgr.getPlaybackDev();
 
-                    _logger.LogInformation(
-                        "SetOutputDevice({DeviceId}): sndActive={Active}, prevCapture={Cap}, prevPlayback={Play}",
-                        deviceId, wasActive, prevCapture, prevPlayback);
-
+                    // setPlaybackDev uses PJSUA_SND_DEV_NO_IMMEDIATE_OPEN which
+                    // defers the change. setSndDevMode(0) forces an immediate
+                    // close + reopen of the sound device with the new IDs.
                     audMgr.setPlaybackDev(deviceId);
-
-                    // setPlaybackDev uses PJSUA_SND_DEV_NO_IMMEDIATE_OPEN, which
-                    // defers the device change until the next call. To switch the
-                    // audio device mid-call we must reopen the sound device now.
-                    // setSndDevMode(0) calls pjsua_set_snd_dev2 without the
-                    // NO_IMMEDIATE_OPEN flag, forcing an immediate close + reopen.
-                    // Always force reopen — sndIsActive() can return false even
-                    // when media is connected through the conference bridge.
                     _logger.LogInformation("Forcing immediate sound device reopen for playback device {DeviceId}", deviceId);
                     audMgr.setSndDevMode(0);
-
-                    var newPlayback = audMgr.getPlaybackDev();
-                    _logger.LogInformation("After reopen: playbackDev={Play}, sndActive={Active}",
-                        newPlayback, audMgr.sndIsActive());
 
                     var devInfo = audMgr.getDevInfo(deviceId);
                     CurrentOutputDevice = new AudioDeviceInfo
