@@ -90,12 +90,9 @@ internal sealed class SipAudioManager : ISipAudioManager
                     var audMgr = ep.audDevManager();
                     audMgr.setCaptureDev(deviceId);
 
-                    // Force immediate reopen if sound device is active (mid-call)
-                    if (audMgr.sndIsActive())
-                    {
-                        _logger.LogInformation("Sound device active — forcing immediate reopen for capture device {DeviceId}", deviceId);
-                        audMgr.setSndDevMode(0);
-                    }
+                    // Always force immediate reopen to apply the device change
+                    _logger.LogInformation("Forcing immediate sound device reopen for capture device {DeviceId}", deviceId);
+                    audMgr.setSndDevMode(0);
 
                     var devInfo = audMgr.getDevInfo(deviceId);
                     CurrentInputDevice = new AudioDeviceInfo
@@ -187,6 +184,14 @@ internal sealed class SipAudioManager : ISipAudioManager
                 try
                 {
                     var audMgr = ep.audDevManager();
+                    var wasActive = audMgr.sndIsActive();
+                    var prevCapture = audMgr.getCaptureDev();
+                    var prevPlayback = audMgr.getPlaybackDev();
+
+                    _logger.LogInformation(
+                        "SetOutputDevice({DeviceId}): sndActive={Active}, prevCapture={Cap}, prevPlayback={Play}",
+                        deviceId, wasActive, prevCapture, prevPlayback);
+
                     audMgr.setPlaybackDev(deviceId);
 
                     // setPlaybackDev uses PJSUA_SND_DEV_NO_IMMEDIATE_OPEN, which
@@ -194,11 +199,14 @@ internal sealed class SipAudioManager : ISipAudioManager
                     // audio device mid-call we must reopen the sound device now.
                     // setSndDevMode(0) calls pjsua_set_snd_dev2 without the
                     // NO_IMMEDIATE_OPEN flag, forcing an immediate close + reopen.
-                    if (audMgr.sndIsActive())
-                    {
-                        _logger.LogInformation("Sound device active — forcing immediate reopen for playback device {DeviceId}", deviceId);
-                        audMgr.setSndDevMode(0);
-                    }
+                    // Always force reopen — sndIsActive() can return false even
+                    // when media is connected through the conference bridge.
+                    _logger.LogInformation("Forcing immediate sound device reopen for playback device {DeviceId}", deviceId);
+                    audMgr.setSndDevMode(0);
+
+                    var newPlayback = audMgr.getPlaybackDev();
+                    _logger.LogInformation("After reopen: playbackDev={Play}, sndActive={Active}",
+                        newPlayback, audMgr.sndIsActive());
 
                     var devInfo = audMgr.getDevInfo(deviceId);
                     CurrentOutputDevice = new AudioDeviceInfo
