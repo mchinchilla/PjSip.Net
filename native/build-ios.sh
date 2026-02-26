@@ -27,6 +27,14 @@ fi
 cp "$SCRIPT_DIR/config_site.h" "$PJ_DIR/pjlib/include/pj/config_site.h"
 echo "Copied config_site.h"
 
+# --- Apply patches ---
+PATCHES_DIR="$SCRIPT_DIR/patches"
+if [ -d "$PATCHES_DIR" ]; then
+    for patch in "$PATCHES_DIR"/*.patch; do
+        [ -f "$patch" ] && echo "Applying patch: $(basename "$patch")" && git -C "$PJ_DIR" apply "$patch"
+    done
+fi
+
 # --- Find iOS SDK ---
 IOS_SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
 IOS_MIN_VERSION="16.0"

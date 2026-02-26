@@ -1,0 +1,54 @@
+--- a/pjmedia/src/pjmedia-audiodev/coreaudio_dev.m
++++ b/pjmedia/src/pjmedia-audiodev/coreaudio_dev.m
+@@ -381,6 +381,14 @@
+ #endif
+
+     cf_instance = cf;
++#endif
++
++#if TARGET_OS_MACCATALYST
++    PJ_LOG(4, (THIS_FILE, "core audio: Mac Catalyst build (COREAUDIO_MAC=%d)", COREAUDIO_MAC));
++#elif TARGET_OS_IPHONE
++    PJ_LOG(4, (THIS_FILE, "core audio: iOS build (COREAUDIO_MAC=%d)", COREAUDIO_MAC));
++#else
++    PJ_LOG(4, (THIS_FILE, "core audio: macOS build (COREAUDIO_MAC=%d)", COREAUDIO_MAC));
+ #endif
+
+     PJ_LOG(4, (THIS_FILE, "core audio initialized"));
+@@ -1389,6 +1397,10 @@
+     }
+
+ #if COREAUDIO_MAC
++    PJ_LOG(4, (THIS_FILE, "AudioUnit: subtype=%s, ec_enabled=%d, dev_id=%d",
++               strm->param.ec_enabled ? "VoiceProcessingIO" : "HALOutput",
++               strm->param.ec_enabled, dev_id));
++
+     if (!strm->param.ec_enabled) {
+         /* When using VPIO on Mac, we shouldn't set the current device.
+          * Doing so will cause getting the buffer size later to fail
+@@ -1708,15 +1720,18 @@
+                           PJMEDIA_AUD_DEV_CAP_OUTPUT_ROUTE,
+                           &param->output_route);
+     }
+-    if (param->flags & PJMEDIA_AUD_DEV_CAP_EC) {
+ #if COREAUDIO_MAC
+-        /* Temporarily disable VPIO on Mac for stereo due to recording sound
+-         * artefacts.
+-         */
+-        if (param->channel_count > 1) {
+-            strm->param.ec_enabled = PJ_FALSE;
+-        }
++    /* Disable VPIO on macOS unconditionally. VoiceProcessingIO is designed
++     * for iOS where AVAudioSession manages a single audio route. On macOS
++     * with multiple CoreAudio HAL devices, VPIO:
++     *   - Ignores kAudioOutputUnitProperty_CurrentDevice (no device selection)
++     *   - May produce static/crackling due to format mismatches
++     * Use HAL Output with the built-in software AEC instead.
++     */
++    strm->param.ec_enabled = PJ_FALSE;
+ #endif
++
++    if (param->flags & PJMEDIA_AUD_DEV_CAP_EC) {
+         status = ca_stream_set_cap(&strm->base,
+                                    PJMEDIA_AUD_DEV_CAP_EC,
+                                    &strm->param.ec_enabled);

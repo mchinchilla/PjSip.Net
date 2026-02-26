@@ -25,6 +25,14 @@ fi
 cp "$SCRIPT_DIR/config_site.h" "$PJ_DIR/pjlib/include/pj/config_site.h"
 echo "Copied config_site.h"
 
+# --- Apply patches ---
+PATCHES_DIR="$SCRIPT_DIR/patches"
+if [ -d "$PATCHES_DIR" ]; then
+    for patch in "$PATCHES_DIR"/*.patch; do
+        [ -f "$patch" ] && echo "Applying patch: $(basename "$patch")" && git -C "$PJ_DIR" apply "$patch"
+    done
+fi
+
 # --- OpenSSL from Homebrew ---
 OPENSSL_PREFIX="$(brew --prefix openssl@3 2>/dev/null || echo "")"
 if [ -z "$OPENSSL_PREFIX" ]; then

@@ -114,6 +114,14 @@ fi
 cp "$CONFIG_SITE_SRC" "$CONFIG_SITE_DST"
 echo "  -> $CONFIG_SITE_DST"
 
+# Apply patches from native/patches/
+PATCHES_DIR="$NATIVE_ROOT/patches"
+if [[ -d "$PATCHES_DIR" ]]; then
+    for patch in "$PATCHES_DIR"/*.patch; do
+        [[ -f "$patch" ]] && echo "  Applying patch: $(basename "$patch")" && git -C "$PJPROJECT_DIR" apply "$patch"
+    done
+fi
+
 # ---------------------------------------------------------------------------
 # Step 3 — Configure and build
 # ---------------------------------------------------------------------------
