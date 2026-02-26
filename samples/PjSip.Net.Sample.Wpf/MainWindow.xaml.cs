@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using PjSip.Net.Accounts;
 using PjSip.Net.Calls;
 using PjSip.Net.DependencyInjection;
+using PjSip.Net.Media;
 using PjSip.Net.Transport;
 
 namespace PjSip.Net.Sample.Wpf;
@@ -49,8 +50,24 @@ public partial class MainWindow : Window
         _phone.RegistrationStateChanged += (s, args) =>
             Dispatcher.Invoke(() => Log($"Account {args.Account.Uri}: {args.NewState}"));
 
+        // Audio route change handling
+        _phone.Audio.AudioRouteChanged += (s, args) =>
+            Dispatcher.Invoke(() =>
+            {
+                Log($"Audio route changed: {args.Reason}, device: {args.NewDeviceName}");
+                if (args.NewDeviceName is not null)
+                    _phone.Audio.SetOutputDeviceByName(args.NewDeviceName);
+            });
+
         await _phone.StartAsync();
         StatusText.Text = $"Status: {_phone.State}";
+
+        // Log available audio devices
+        foreach (var mic in _phone.Audio.GetInputDevices())
+            Log($"  IN:  [{mic.DeviceId}] {mic.Name}");
+        foreach (var spk in _phone.Audio.GetOutputDevices())
+            Log($"  OUT: [{spk.DeviceId}] {spk.Name}");
+
         Log("Phone started");
     }
 

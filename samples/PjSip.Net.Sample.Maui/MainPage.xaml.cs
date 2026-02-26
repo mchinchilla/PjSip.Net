@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using PjSip.Net.Accounts;
 using PjSip.Net.Calls;
 using PjSip.Net.DependencyInjection;
+using PjSip.Net.Media;
 using PjSip.Net.Transport;
 
 namespace PjSip.Net.Sample.Maui;
@@ -36,6 +37,15 @@ public partial class MainPage : ContentPage
 
         var provider = services.BuildServiceProvider();
         _phone = provider.GetRequiredService<ISipPhone>();
+        // Audio route change handling (Bluetooth, headset, CarPlay, Android Auto)
+        _phone.Audio.AudioRouteChanged += (s, args) =>
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                StatusLabel.Text = $"Audio: {args.Reason} → {args.NewDeviceName}";
+                if (args.NewDeviceName is not null)
+                    _phone.Audio.SetOutputDeviceByName(args.NewDeviceName);
+            });
+
         await _phone.StartAsync();
         StatusLabel.Text = $"Status: {_phone.State}";
     }

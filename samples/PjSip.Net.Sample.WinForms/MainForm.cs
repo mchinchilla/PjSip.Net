@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using PjSip.Net.Accounts;
 using PjSip.Net.DependencyInjection;
+using PjSip.Net.Media;
 using PjSip.Net.Transport;
 
 namespace PjSip.Net.Sample.WinForms;
@@ -47,6 +48,14 @@ public partial class MainForm : Form
 
         _phone.IncomingCall += (s, e) =>
             BeginInvoke(() => MessageBox.Show($"Incoming call from {e.RemoteUri}"));
+
+        // Audio route change handling
+        _phone.Audio.AudioRouteChanged += (s, args) =>
+            BeginInvoke(() =>
+            {
+                if (args.NewDeviceName is not null)
+                    _phone.Audio.SetOutputDeviceByName(args.NewDeviceName);
+            });
 
         await _phone.StartAsync();
         Text = $"PjSip.Net WinForms — {_phone.State}";

@@ -648,8 +648,25 @@ public interface ISipAudioManager
 |---|---|---|
 | `GetInputDevices()` | `IReadOnlyList<AudioDeviceInfo>` | Lista de micrófonos disponibles |
 | `GetOutputDevices()` | `IReadOnlyList<AudioDeviceInfo>` | Lista de altavoces disponibles |
-| `SetInputDevice(deviceId)` | `void` | Cambiar el micrófono activo |
-| `SetOutputDevice(deviceId)` | `void` | Cambiar el altavoz activo |
+| `SetInputDevice(deviceId)` | `void` | Cambiar el micrófono activo (cambio inmediato durante llamada) |
+| `SetOutputDevice(deviceId)` | `void` | Cambiar el altavoz activo (cambio inmediato durante llamada) |
+| `SetInputDeviceByName(name)` | `bool` | Cambiar micrófono por nombre (coincidencia exacta, luego parcial, case-insensitive) |
+| `SetOutputDeviceByName(name)` | `bool` | Cambiar altavoz por nombre (coincidencia exacta, luego parcial, case-insensitive) |
+| `RefreshDevices()` | `void` | Invalidar caché de dispositivos para re-leer del sistema operativo |
+| `NotifyAudioRouteChanged(reason, newDeviceName?)` | `void` | Señalar cambio de ruta de audio desde listeners de plataforma |
+
+**Eventos:**
+
+| Evento | Tipo | Descripción |
+|---|---|---|
+| `AudioRouteChanged` | `EventHandler<AudioRouteChangedEventArgs>` | Se dispara ante cambios de ruta de audio (Bluetooth, auriculares, CarPlay, Android Auto) |
+
+**AudioRouteChangedEventArgs:**
+
+| Propiedad | Tipo | Descripción |
+|---|---|---|
+| `Reason` | `string` | Razón específica de la plataforma (ej: "NewDeviceAvailable", "OldDeviceUnavailable") |
+| `NewDeviceName` | `string?` | Nombre del nuevo dispositivo de audio, si se conoce |
 
 **AudioDeviceInfo:**
 
@@ -1760,9 +1777,13 @@ foreach (var mic in microphones)
 foreach (var spk in speakers)
     Console.WriteLine($"[{spk.DeviceId}] {spk.Name} ({spk.OutputChannels}ch)");
 
-// Cambiar dispositivo
+// Cambiar dispositivo por ID (funciona durante llamada — cambio inmediato)
 audio.SetInputDevice(microphones[1].DeviceId);
 audio.SetOutputDevice(speakers[0].DeviceId);
+
+// Cambiar dispositivo por nombre (coincidencia exacta, luego parcial, case-insensitive)
+audio.SetInputDeviceByName("Realtek");
+audio.SetOutputDeviceByName("Jabra");
 
 // Ajustar volumen (0.0 = silencio, 1.0 = máximo)
 audio.InputLevel = 0.8f;    // Micrófono al 80%
@@ -1771,6 +1792,21 @@ audio.OutputLevel = 1.0f;   // Altavoz al 100%
 // Silenciar una llamada específica
 call.SetMute(true);   // Silenciar micrófono en esta llamada
 call.SetMute(false);  // Des-silenciar
+
+// Reaccionar a cambios de ruta de audio (Bluetooth, auriculares, CarPlay, Android Auto)
+audio.AudioRouteChanged += (s, e) =>
+{
+    Console.WriteLine($"Ruta de audio cambió: {e.Reason}, dispositivo: {e.NewDeviceName}");
+    // Opcionalmente cambiar al nuevo dispositivo
+    if (e.NewDeviceName is not null)
+        audio.SetOutputDeviceByName(e.NewDeviceName);
+};
+
+// Notificar desde listener específico de plataforma (ej: iOS AVAudioSession)
+audio.NotifyAudioRouteChanged("NewDeviceAvailable", "AirPods Pro");
+
+// Forzar recarga de lista de dispositivos tras cambios de hardware
+audio.RefreshDevices();
 ```
 
 ---

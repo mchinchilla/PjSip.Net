@@ -648,8 +648,25 @@ public interface ISipAudioManager
 |---|---|---|
 | `GetInputDevices()` | `IReadOnlyList<AudioDeviceInfo>` | List of available microphones |
 | `GetOutputDevices()` | `IReadOnlyList<AudioDeviceInfo>` | List of available speakers |
-| `SetInputDevice(deviceId)` | `void` | Change active microphone |
-| `SetOutputDevice(deviceId)` | `void` | Change active speaker |
+| `SetInputDevice(deviceId)` | `void` | Change active microphone (immediate mid-call switch) |
+| `SetOutputDevice(deviceId)` | `void` | Change active speaker (immediate mid-call switch) |
+| `SetInputDeviceByName(name)` | `bool` | Change microphone by name (exact then contains, case-insensitive) |
+| `SetOutputDeviceByName(name)` | `bool` | Change speaker by name (exact then contains, case-insensitive) |
+| `RefreshDevices()` | `void` | Invalidate cached device lists so next enumeration re-reads from OS |
+| `NotifyAudioRouteChanged(reason, newDeviceName?)` | `void` | Signal an audio route change from platform listeners |
+
+**Events:**
+
+| Event | Type | Description |
+|---|---|---|
+| `AudioRouteChanged` | `EventHandler<AudioRouteChangedEventArgs>` | Raised on audio route changes (Bluetooth, headset, CarPlay, Android Auto) |
+
+**AudioRouteChangedEventArgs:**
+
+| Property | Type | Description |
+|---|---|---|
+| `Reason` | `string` | Platform-specific reason (e.g., "NewDeviceAvailable", "OldDeviceUnavailable") |
+| `NewDeviceName` | `string?` | Name of the new audio device, if known |
 
 **AudioDeviceInfo:**
 
@@ -1760,9 +1777,13 @@ foreach (var mic in microphones)
 foreach (var spk in speakers)
     Console.WriteLine($"[{spk.DeviceId}] {spk.Name} ({spk.OutputChannels}ch)");
 
-// Change device
+// Change device by ID (works mid-call — immediate switch)
 audio.SetInputDevice(microphones[1].DeviceId);
 audio.SetOutputDevice(speakers[0].DeviceId);
+
+// Change device by name (exact match then contains, case-insensitive)
+audio.SetInputDeviceByName("Realtek");
+audio.SetOutputDeviceByName("Jabra");
 
 // Adjust volume (0.0 = silence, 1.0 = maximum)
 audio.InputLevel = 0.8f;    // Microphone at 80%
@@ -1771,6 +1792,21 @@ audio.OutputLevel = 1.0f;   // Speaker at 100%
 // Mute a specific call
 call.SetMute(true);   // Mute microphone for this call
 call.SetMute(false);  // Unmute
+
+// React to audio route changes (Bluetooth, headset, CarPlay, Android Auto)
+audio.AudioRouteChanged += (s, e) =>
+{
+    Console.WriteLine($"Audio route changed: {e.Reason}, device: {e.NewDeviceName}");
+    // Optionally switch to the new device
+    if (e.NewDeviceName is not null)
+        audio.SetOutputDeviceByName(e.NewDeviceName);
+};
+
+// Notify from platform-specific listener (e.g., iOS AVAudioSession)
+audio.NotifyAudioRouteChanged("NewDeviceAvailable", "AirPods Pro");
+
+// Force refresh device list after hardware changes
+audio.RefreshDevices();
 ```
 
 ---

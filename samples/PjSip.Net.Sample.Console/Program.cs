@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using PjSip.Net;
 using PjSip.Net.Accounts;
 using PjSip.Net.DependencyInjection;
+using PjSip.Net.Media;
 using PjSip.Net.Transport;
 
 // Configure services
@@ -50,10 +51,30 @@ await phone.StartAsync();
 Console.WriteLine($"Phone started. State: {phone.State}");
 Console.WriteLine($"Registered accounts: {phone.Accounts.Count}");
 
+// Audio device management
+var audio = phone.Audio;
+
+// List available devices
+Console.WriteLine("\n--- Audio Devices ---");
+foreach (var mic in audio.GetInputDevices())
+    Console.WriteLine($"  IN:  [{mic.DeviceId}] {mic.Name}");
+foreach (var spk in audio.GetOutputDevices())
+    Console.WriteLine($"  OUT: [{spk.DeviceId}] {spk.Name}");
+
+// Select device by name (exact then contains, case-insensitive)
+audio.SetInputDeviceByName("Realtek");
+audio.SetOutputDeviceByName("Jabra");
+
+// React to audio route changes (Bluetooth, headset, CarPlay, Android Auto)
+audio.AudioRouteChanged += (s, e) =>
+{
+    Console.WriteLine($"Audio route changed: {e.Reason}, device: {e.NewDeviceName}");
+};
+
 // Make a call
 if (phone.Accounts.Count > 0)
 {
-    Console.WriteLine("Making a test call...");
+    Console.WriteLine("\nMaking a test call...");
     var call = phone.MakeCall(phone.Accounts[0], "sip:bob@example.com");
     Console.WriteLine($"Call state: {call.State}");
 }
