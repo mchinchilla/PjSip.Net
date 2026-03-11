@@ -4,6 +4,7 @@ using PjSip.Net.Calls;
 using PjSip.Net.Events;
 using PjSip.Net.Interop.Generated;
 using PjSip.Net.Messaging;
+using PjSip.Net.Transport;
 using Gen = PjSip.Net.Interop.Generated;
 using SipHeader = PjSip.Net.Calls.SipHeader;
 
@@ -63,6 +64,31 @@ internal sealed class ManagedAccount : ISipAccount
     /// </summary>
     internal NativeAccountBridge? Native => _native;
 
+    /// <summary>
+    /// Returns the ";transport=xxx" suffix for this account's transport,
+    /// so all SIP URIs (registrar, proxy, call destinations) are pinned
+    /// to the correct transport.
+    /// </summary>
+    internal string GetTransportSuffix()
+    {
+        if (Options.Transport.HasValue)
+        {
+            return Options.Transport.Value switch
+            {
+                SipTransportType.Tcp => ";transport=tcp",
+                SipTransportType.Tls => ";transport=tls",
+                SipTransportType.Tcp6 => ";transport=tcp",
+                SipTransportType.Tls6 => ";transport=tls",
+                // UDP is the default in SIP, but we add it explicitly
+                // to prevent PJSIP from choosing a different transport via DNS SRV.
+                _ => ";transport=udp"
+            };
+        }
+
+        // Backwards compatibility: fall back to UseTls flag
+        return Options.UseTls ? ";transport=tls" : "";
+    }
+
     public event EventHandler<RegistrationStateChangedEventArgs>? RegistrationStateChanged;
     public event EventHandler<IncomingCallEventArgs>? IncomingCall;
     public event EventHandler<MwiStateChangedEventArgs>? MwiStateChanged;
@@ -95,7 +121,7 @@ internal sealed class ManagedAccount : ISipAccount
 
             using var acfg = new AccountConfig();
             var sipUser = Options.Username.Replace("@", "%40");
-            var tlsSuffix = Options.UseTls ? ";transport=tls" : "";
+            var transportSuffix = GetTransportSuffix();
 
             acfg.idUri = Options.DisplayName is not null
                 ? $"\"{Options.DisplayName}\" <sip:{sipUser}@{Options.Domain}>"
@@ -108,8 +134,12 @@ internal sealed class ManagedAccount : ISipAccount
             {
                 registrar = $"sip:{registrar}";
             }
-            acfg.regConfig.registrarUri = $"{registrar}{tlsSuffix}";
+            acfg.regConfig.registrarUri = $"{registrar}{transportSuffix}";
             acfg.regConfig.timeoutSec = (uint)Options.RegistrationTimeout;
+
+            _logger.LogInformation(
+                "Account config: id={Id}, registrar={Registrar}, transport={Transport}",
+                acfg.idUri, acfg.regConfig.registrarUri, transportSuffix.Length > 0 ? transportSuffix : "(default)");
 
             // Outbound proxy
             if (!string.IsNullOrEmpty(Options.OutboundProxy))
@@ -120,7 +150,7 @@ internal sealed class ManagedAccount : ISipAccount
                 {
                     proxy = $"sip:{proxy}";
                 }
-                acfg.sipConfig.proxies.Add($"{proxy}{tlsSuffix}");
+                acfg.sipConfig.proxies.Add($"{proxy}{transportSuffix}");
             }
 
             // Auth credentials
