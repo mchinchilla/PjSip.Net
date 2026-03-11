@@ -212,13 +212,24 @@ internal sealed class ManagedCall : ISipCall
             }
         }
 
+        // Pin the destination URI to the account's transport so PJSIP doesn't
+        // pick a different transport via DNS SRV (e.g. TLS for a UDP account).
+        var destUri = Info.RemoteUri;
+        var transportSuffix = _account.GetTransportSuffix();
+        if (transportSuffix.Length > 0 && !destUri.Contains(";transport=", StringComparison.OrdinalIgnoreCase))
+        {
+            destUri += transportSuffix;
+        }
+
         try
         {
-            _native.makeCall(Info.RemoteUri, prm);
+            _logger.LogInformation("makeCall: {DestUri} (account transport: {Transport})",
+                destUri, transportSuffix.Length > 0 ? transportSuffix : "(default)");
+            _native.makeCall(destUri, prm);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "makeCall failed for {RemoteUri}", Info.RemoteUri);
+            _logger.LogError(ex, "makeCall failed for {RemoteUri}", destUri);
             // Clean up the native bridge since the call was never established
             _native.Dispose();
             _native = null;
@@ -458,6 +469,9 @@ internal sealed class ManagedCall : ISipCall
             ? TimeSpan.FromSeconds(ci.connectDuration.sec) + TimeSpan.FromMilliseconds(ci.connectDuration.msec)
             : TimeSpan.Zero;
 
+        var statusCode = (int)ci.lastStatusCode;
+        var statusText = ci.lastReason;
+
         Info = new SipCallInfo
         {
             CallId = Id,
@@ -466,10 +480,14 @@ internal sealed class ManagedCall : ISipCall
             State = newState,
             Direction = Direction,
             Duration = duration,
-            StatusCode = (int)ci.lastStatusCode,
-            StatusText = ci.lastReason,
+            StatusCode = statusCode,
+            StatusText = statusText,
             RemoteDisplayName = ExtractDisplayName(ci.remoteUri) ?? Info.RemoteDisplayName
         };
+
+        _logger.LogInformation(
+            "Call {CallId} state: {State} (remote={Remote}, code={StatusCode}, reason={Reason})",
+            Id, newState, ci.remoteUri, statusCode, string.IsNullOrEmpty(statusText) ? "(none)" : statusText);
 
         if (newState == SipCallState.Confirmed && _connectTime == default)
             _connectTime = DateTime.UtcNow;
