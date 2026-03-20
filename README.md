@@ -1,7 +1,5 @@
 **[English](README.md)** | [Español](README.es.md)
 
-<div align="center">
-
 # ☎️ PjSip.Net
 
 **High-level SIP telephony SDK for .NET 10**
@@ -15,8 +13,6 @@
 
 Based on [PJSIP 2.16](https://www.pjsip.org/) with native TLS support (Schannel on Windows, OpenSSL on Android)
 Compatible with **WinForms** · **WPF** · **MAUI** · **Mac Catalyst** · **Console**
-
-</div>
 
 ---
 
