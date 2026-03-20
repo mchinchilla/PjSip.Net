@@ -24,7 +24,7 @@
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
 
     <!-- Versioning -->
-    <VersionPrefix>1.0.16</VersionPrefix>
+    <VersionPrefix>1.0.17</VersionPrefix>
     <VersionSuffix></VersionSuffix>
   </PropertyGroup>
 </Project>
