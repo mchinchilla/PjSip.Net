@@ -310,6 +310,14 @@ internal sealed class ManagedAccount : ISipAccount
     }
 
     /// <summary>
+    /// Called from the native bridge on typing indication receipt.
+    /// </summary>
+    internal void OnNativeTypingIndication(string fromUri, bool isTyping)
+    {
+        _messaging?.OnTypingIndication(fromUri, isTyping);
+    }
+
+    /// <summary>
     /// Called from the native bridge on instant message status.
     /// </summary>
     internal void OnNativeInstantMessageStatus(string toUri, int code, string reason)
@@ -433,6 +441,18 @@ internal sealed class ManagedAccount : ISipAccount
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error in onInstantMessage callback");
+            }
+        }
+
+        public override void onTypingIndication(OnTypingIndicationParam prm)
+        {
+            try
+            {
+                _managed.OnNativeTypingIndication(prm.fromUri, prm.isTyping);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in onTypingIndication callback");
             }
         }
 
