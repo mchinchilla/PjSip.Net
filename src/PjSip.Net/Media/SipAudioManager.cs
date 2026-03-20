@@ -293,6 +293,28 @@ internal sealed class SipAudioManager : ISipAudioManager
         });
     }
 
+    public void SetNoSoundDevice()
+    {
+        var ep = _endpointManager.Endpoint;
+        if (ep is null) return;
+
+        Invoker.Invoke(() =>
+        {
+            try
+            {
+                var audMgr = ep.audDevManager();
+                // Replace hardware audio with a null (silent) port.
+                // PjSIP will automatically reopen the real device when a call is established.
+                audMgr.setNullDev();
+                _logger.LogInformation("Null sound device set — hardware audio released, will reopen on call");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to set null sound device");
+            }
+        });
+    }
+
     public void NotifyAudioRouteChanged(string reason, string? newDeviceName = null)
     {
         _logger.LogInformation("Audio route changed: reason={Reason}, newDevice={Device}",

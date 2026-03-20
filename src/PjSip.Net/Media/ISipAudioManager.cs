@@ -19,6 +19,13 @@ public interface ISipAudioManager
     void RefreshDevices();
 
     /// <summary>
+    /// Closes the hardware sound device so PJSIP does not hold the audio subsystem open.
+    /// The device will be reopened automatically when a call is established.
+    /// Use this at startup to prevent macOS/Windows from ducking system volume.
+    /// </summary>
+    void SetNoSoundDevice();
+
+    /// <summary>
     /// Raised when the platform detects an audio route change (e.g. Bluetooth
     /// connected/disconnected, headset plugged, CarPlay, Android Auto).
     /// </summary>
