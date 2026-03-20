@@ -97,26 +97,25 @@ internal sealed class PjSipEndpointManager : IDisposable
                 CreateTransport(new SipTransportOptions { Type = SipTransportType.Udp, Port = 5060 });
             }
 
-            _endpoint.libStart();
-
-            // On iOS, PJSIP tries to open the CoreAudio device during makeCall
-            // which fails with error -2002889396 if the AudioUnit can't start.
-            // Use null sound device at init so makeCall succeeds (SIP signaling works),
-            // then switch to real device when media becomes active.
-            if (OperatingSystem.IsIOS() && !OperatingSystem.IsMacCatalyst())
+            // Set null sound device BEFORE libStart to prevent the OS from
+            // ducking system volume (macOS/Windows) and to avoid iOS AudioUnit
+            // errors. The real audio device is opened when a call is established.
+            if (OperatingSystem.IsIOS() || OperatingSystem.IsMacCatalyst() || OperatingSystem.IsWindows())
             {
                 try
                 {
                     var devCount = _endpoint.audDevManager().enumDev2().Count;
-                    _logger.LogInformation("iOS: {DeviceCount} audio device(s) found — using null sound device at init", devCount);
+                    _logger.LogInformation("{DeviceCount} audio device(s) found — using null sound device at init", devCount);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "iOS: audio device enumeration failed");
+                    _logger.LogWarning(ex, "Audio device enumeration failed");
                 }
                 try { _endpoint.audDevManager().setNullDev(); }
-                catch (Exception ex) { _logger.LogError(ex, "iOS: setNullDev failed"); }
+                catch (Exception ex) { _logger.LogError(ex, "setNullDev failed"); }
             }
+
+            _endpoint.libStart();
 
             _initialized = true;
             _logger.LogInformation("PJSIP endpoint initialized successfully");
