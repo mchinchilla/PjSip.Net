@@ -22,4 +22,13 @@ public sealed class SipAccountOptions
     /// When null, falls back to <see cref="UseTls"/> for backwards compatibility.
     /// </summary>
     public SipTransportType? Transport { get; set; }
+
+    /// <summary>
+    /// Extra parameters appended to the Contact URI on REGISTER, semicolon-separated and WITHOUT a
+    /// leading ';' (PJSIP adds the separator). Primarily for RFC 8599 SIP push so the registrar/PBX
+    /// can wake the device via APNs/FCM, e.g.:
+    /// <c>pn-provider=apns;pn-prid=&lt;token&gt;;pn-param=&lt;TeamId&gt;.&lt;bundleId&gt;.voip</c>
+    /// Maps to pjsua2 <c>AccountConfig.regConfig.contactUriParams</c>. Null/empty = no extra params.
+    /// </summary>
+    public string? ContactUriParams { get; set; }
 }

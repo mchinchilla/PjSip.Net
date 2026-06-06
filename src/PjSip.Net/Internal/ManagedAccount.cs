@@ -89,6 +89,18 @@ internal sealed class ManagedAccount : ISipAccount
         return Options.UseTls ? ";transport=tls" : "";
     }
 
+    /// <summary>
+    /// Normalizes Contact-URI params for pjsua2 <c>regConfig.contactUriParams</c>: trims, returns
+    /// null for null/empty/whitespace, and ensures exactly one leading ';' (PJSIP appends the value
+    /// raw to the Contact URI and expects the leading separator). Used for RFC 8599 push params.
+    /// </summary>
+    internal static string? NormalizeContactUriParams(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var p = value.Trim();
+        return p.StartsWith(';') ? p : ";" + p;
+    }
+
     public event EventHandler<RegistrationStateChangedEventArgs>? RegistrationStateChanged;
     public event EventHandler<IncomingCallEventArgs>? IncomingCall;
     public event EventHandler<MwiStateChangedEventArgs>? MwiStateChanged;
@@ -136,6 +148,15 @@ internal sealed class ManagedAccount : ISipAccount
             }
             acfg.regConfig.registrarUri = $"{registrar}{transportSuffix}";
             acfg.regConfig.timeoutSec = (uint)Options.RegistrationTimeout;
+
+            // RFC 8599 push: extra Contact-URI params (pn-provider/pn-prid/pn-param). PJSIP appends
+            // contactUriParams raw to the Contact URI and expects a leading ';'.
+            var contactParams = NormalizeContactUriParams(Options.ContactUriParams);
+            if (contactParams is not null)
+            {
+                acfg.regConfig.contactUriParams = contactParams;
+                _logger.LogInformation("Account contactUriParams (push): {Params}", contactParams);
+            }
 
             _logger.LogInformation(
                 "Account config: id={Id}, registrar={Registrar}, transport={Transport}",
