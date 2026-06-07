@@ -2,26 +2,67 @@
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
 
   <!--
-    PjSip.Net.Native.iOS — copies libpjsua2.dylib into the iOS app bundle
-    after _CreateAppBundle but before _CodesignAppBundle so that the SDK's
-    codesign pass signs it with the app's identity.
-    Only for real iOS device builds; Mac Catalyst uses the macOS dylib.
+    PjSip.Net.Native.iOS — packages libpjsua2 (+ its bcg729 dependency) as proper .framework
+    bundles inside <App>.app/Frameworks/ and lets the SDK's single codesign pass sign them.
+
+    WHY frameworks, not loose dylibs at the bundle root:
+      iOS refuses to dlopen a bare .dylib placed at the .app root — dynamic libraries MUST live in
+      <App>.app/Frameworks/<name>.framework/ and be signed as part of the bundle seal. A loose
+      root dylib (or one signed AFTER the bundle is sealed) makes dlopen fail silently and the
+      managed wrapper falls into "stub mode" (faked registration, no real SIP). See the prior
+      _BundlePjSipNativeForIOS approach which copied to the root and broke under Clean+Build/Rider.
+
+    WHY CreateAppBundleDependsOn (not CodesignDependsOn / AfterTargets):
+      CreateAppBundleDependsOn runs while the app bundle is being assembled — BEFORE the SDK
+      enumerates files to sign — so the frameworks are present when _CodesignAppBundle runs and
+      get signed in the SAME pass that seals the bundle. CodesignDependsOn was unreliable under
+      Rider's deploy (the framework ended up unsigned). The consuming app's NativeAvailability
+      probe also searches Frameworks/libpjsua2.framework/libpjsua2 so the runtime can dlopen it.
+
+    Only for real iOS device builds; Mac Catalyst uses the macOS dylib; simulator is skipped.
     (Transitive — applies to projects that indirectly reference this package.)
   -->
-  <Target Name="_BundlePjSipNativeForIOS" AfterTargets="_CreateAppBundle" BeforeTargets="_CodesignAppBundle"
+
+  <PropertyGroup Condition="'$(TargetFramework)' != '' And $([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net10.0-ios')) And $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'maccatalyst' And '$(RuntimeIdentifier)' != 'iossimulator-arm64' And '$(RuntimeIdentifier)' != 'iossimulator-x64'">
+    <CreateAppBundleDependsOn>$(CreateAppBundleDependsOn);_StagePjSipFrameworksForIOS</CreateAppBundleDependsOn>
+  </PropertyGroup>
+
+  <Target Name="_StagePjSipFrameworksForIOS"
           Condition="'$(TargetFramework)' != '' And $([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net10.0-ios')) And $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'maccatalyst' And '$(RuntimeIdentifier)' != 'iossimulator-arm64' And '$(RuntimeIdentifier)' != 'iossimulator-x64'">
     <PropertyGroup>
       <_PjSipIosDylib>$(MSBuildThisFileDirectory)..\..\runtimes\ios-arm64\native\libpjsua2.dylib</_PjSipIosDylib>
+      <_PjSipFwDir>$(_AppBundlePath)Frameworks/</_PjSipFwDir>
+      <_PjSipFw>$(_PjSipFwDir)libpjsua2.framework/</_PjSipFw>
+      <_Bcg729Fw>$(_PjSipFwDir)libbcg729.framework/</_Bcg729Fw>
+      <_PjSipStubC>$(IntermediateOutputPath)bcg729_stub.c</_PjSipStubC>
     </PropertyGroup>
-    <Copy SourceFiles="$(_PjSipIosDylib)" DestinationFiles="$(_AppBundlePath)libpjsua2.dylib"
+
+    <MakeDir Directories="$(_PjSipFw);$(_Bcg729Fw)" Condition="Exists('$(_PjSipIosDylib)')" />
+
+    <!-- Remove any legacy loose root dylibs from older package versions so they don't shadow/conflict. -->
+    <Delete Files="$(_AppBundlePath)libpjsua2.dylib;$(_AppBundlePath)libbcg729.0.dylib" ContinueOnError="true" />
+
+    <!-- 1) bcg729 framework: build the no-op stub that exports the 6 symbols libpjsua2 needs. -->
+    <Exec Condition="Exists('$(_PjSipIosDylib)')"
+          Command="printf '%s\n' '#include &lt;stddef.h&gt;' '#include &lt;stdint.h&gt;' 'void* initBcg729DecoderChannel(void){return NULL;}' 'void closeBcg729DecoderChannel(void* c){(void)c;}' 'void bcg729Decoder(void* c,const uint8_t* b,int l,int e,int s,int r,int16_t* o){(void)c;(void)b;(void)l;(void)e;(void)s;(void)r;(void)o;}' 'void* initBcg729EncoderChannel(int v){(void)v;return NULL;}' 'void closeBcg729EncoderChannel(void* c){(void)c;}' 'void bcg729Encoder(void* c,const int16_t* i,uint8_t* b,uint8_t* l){(void)c;(void)i;(void)b;if(l)*l=0;}' > '$(_PjSipStubC)' &amp;&amp; xcrun --sdk iphoneos clang -arch arm64 -dynamiclib -target arm64-apple-ios15.0 -install_name @rpath/libbcg729.framework/libbcg729 -o '$(_Bcg729Fw)libbcg729' '$(_PjSipStubC)'" />
+
+    <!-- 2) libpjsua2 framework: copy the binary, set its framework install_name, and rewrite the
+            bcg729 dependency to the framework path so dyld resolves it via @rpath/Frameworks. -->
+    <Copy SourceFiles="$(_PjSipIosDylib)" DestinationFiles="$(_PjSipFw)libpjsua2"
           OverwriteReadOnlyFiles="true" SkipUnchangedFiles="false"
           Condition="Exists('$(_PjSipIosDylib)')" />
-    <!-- Fix install name (temporary until CI rebuilds with @executable_path) -->
-    <Exec Command="install_name_tool -id @executable_path/libpjsua2.dylib '$(_AppBundlePath)libpjsua2.dylib'" Condition="Exists('$(_AppBundlePath)libpjsua2.dylib')" />
-    <!-- Rewrite bcg729 dep to bundle path and create stub with exported symbols (temporary until CI links statically) -->
-    <Exec Command="install_name_tool -change @rpath/libbcg729.0.dylib @executable_path/libbcg729.0.dylib '$(_AppBundlePath)libpjsua2.dylib'" Condition="Exists('$(_AppBundlePath)libpjsua2.dylib')" ContinueOnError="true" />
-    <Exec Command="printf '%s\n' '#include &lt;stddef.h&gt;' '#include &lt;stdint.h&gt;' 'void* initBcg729DecoderChannel(void){return NULL;}' 'void closeBcg729DecoderChannel(void* c){(void)c;}' 'void bcg729Decoder(void* c,const uint8_t* b,int l,int e,int s,int r,int16_t* o){(void)c;(void)b;(void)l;(void)e;(void)s;(void)r;(void)o;}' 'void* initBcg729EncoderChannel(int v){(void)v;return NULL;}' 'void closeBcg729EncoderChannel(void* c){(void)c;}' 'void bcg729Encoder(void* c,const int16_t* i,uint8_t* b,uint8_t* l){(void)c;(void)i;(void)b;if(l)*l=0;}' > '$(IntermediateOutputPath)bcg729_stub.c' &amp;&amp; xcrun --sdk iphoneos clang -arch arm64 -dynamiclib -target arm64-apple-ios15.0 -install_name @executable_path/libbcg729.0.dylib -o '$(_AppBundlePath)libbcg729.0.dylib' '$(IntermediateOutputPath)bcg729_stub.c'"
-          Condition="Exists('$(_AppBundlePath)libpjsua2.dylib') And !Exists('$(_AppBundlePath)libbcg729.0.dylib')" ContinueOnError="true" />
+    <Exec Command="install_name_tool -id @rpath/libpjsua2.framework/libpjsua2 '$(_PjSipFw)libpjsua2'" Condition="Exists('$(_PjSipFw)libpjsua2')" />
+    <Exec Command="install_name_tool -change @rpath/libbcg729.0.dylib @rpath/libbcg729.framework/libbcg729 '$(_PjSipFw)libpjsua2'" Condition="Exists('$(_PjSipFw)libpjsua2')" ContinueOnError="true" />
+    <Exec Command="install_name_tool -change @executable_path/libbcg729.0.dylib @rpath/libbcg729.framework/libbcg729 '$(_PjSipFw)libpjsua2'" Condition="Exists('$(_PjSipFw)libpjsua2')" ContinueOnError="true" />
+
+    <!-- 3) Minimal Info.plist for each framework (required for a valid iOS framework bundle). -->
+    <Exec Condition="Exists('$(_PjSipFw)libpjsua2')"
+          Command="/usr/libexec/PlistBuddy -c 'Clear dict' -c 'Add :CFBundleIdentifier string net.pjsip.libpjsua2' -c 'Add :CFBundleExecutable string libpjsua2' -c 'Add :CFBundlePackageType string FMWK' -c 'Add :CFBundleName string libpjsua2' -c 'Add :CFBundleVersion string 1.0' -c 'Add :CFBundleShortVersionString string 1.0' -c 'Add :MinimumOSVersion string 15.0' '$(_PjSipFw)Info.plist'" />
+    <Exec Condition="Exists('$(_Bcg729Fw)libbcg729')"
+          Command="/usr/libexec/PlistBuddy -c 'Clear dict' -c 'Add :CFBundleIdentifier string net.pjsip.libbcg729' -c 'Add :CFBundleExecutable string libbcg729' -c 'Add :CFBundlePackageType string FMWK' -c 'Add :CFBundleName string libbcg729' -c 'Add :CFBundleVersion string 1.0' -c 'Add :CFBundleShortVersionString string 1.0' -c 'Add :MinimumOSVersion string 15.0' '$(_Bcg729Fw)Info.plist'" />
+
+    <Message Importance="high" Text="PjSip.Net.Native.iOS: staged libpjsua2.framework + libbcg729.framework into $(_PjSipFwDir) (SDK will codesign them with the bundle)." Condition="Exists('$(_PjSipFw)libpjsua2')" />
+    <Warning Text="PjSip.Net.Native.iOS: libpjsua2.dylib not found at $(_PjSipIosDylib) — native library will be missing and PjSip will run in stub mode." Condition="!Exists('$(_PjSipIosDylib)')" />
   </Target>
 
 </Project>
