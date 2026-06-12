@@ -370,3 +370,8 @@ FodyWeavers.xsd
 # PJSIP source (cloned by native build scripts)
 pjproject/
 native/pjproject/
+
+# Native PJSIP binaries (built locally or downloaded from CI artifacts, never tracked)
+src/PjSip.Net.Native.*/runtimes/**/native/*.dylib
+src/PjSip.Net.Native.*/runtimes/**/native/*.so
+src/PjSip.Net.Native.*/runtimes/**/native/*.dll

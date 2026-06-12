@@ -183,6 +183,18 @@ internal sealed class ManagedAccount : ISipAccount
                 Options.Password);
             acfg.sipConfig.authCreds.Add(cred);
 
+            // SRTP (secure media) policy
+            if (Options.SrtpUse != SrtpUse.Disabled)
+            {
+                acfg.mediaConfig.srtpUse = Options.SrtpUse == SrtpUse.Mandatory
+                    ? pjmedia_srtp_use.PJMEDIA_SRTP_MANDATORY
+                    : pjmedia_srtp_use.PJMEDIA_SRTP_OPTIONAL;
+                acfg.mediaConfig.srtpSecureSignaling = Options.SrtpSecureSignaling ? 1 : 0;
+                _logger.LogInformation(
+                    "Account SRTP: {SrtpUse} (secureSignaling={SecureSignaling})",
+                    Options.SrtpUse, Options.SrtpSecureSignaling);
+            }
+
             _native.create(acfg);
         });
     }
