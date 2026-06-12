@@ -65,4 +65,21 @@
     <Warning Text="PjSip.Net.Native.iOS: libpjsua2.dylib not found at $(_PjSipIosDylib) — native library will be missing and PjSip will run in stub mode." Condition="!Exists('$(_PjSipIosDylib)')" />
   </Target>
 
+  <!--
+    The SDK's own native-asset copy puts runtimes/ios-arm64/native/libpjsua2.dylib at the .app
+    ROOT during bundle assembly — AFTER _StagePjSipFrameworksForIOS ran, so its early Delete
+    misses it. That loose copy is NOT covered by the SDK codesign pass (only Frameworks/ are),
+    ships unsigned, and dlopen rejects unsigned code on device → stub mode (diagnosed
+    2026-06-12). A loose root dylib is also an App Store rejection. Remove it once the bundle
+    is fully assembled, before signing; the runtime loads
+    Frameworks/libpjsua2.framework/libpjsua2 instead (NativeLoader probes it first since 1.0.24).
+  -->
+  <Target Name="_RemoveLoosePjSipDylibForIOS"
+          AfterTargets="_CreateAppBundle"
+          BeforeTargets="_CodesignAppBundle"
+          Condition="'$(TargetFramework)' != '' And $([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net10.0-ios')) And $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'maccatalyst' And '$(RuntimeIdentifier)' != 'iossimulator-arm64' And '$(RuntimeIdentifier)' != 'iossimulator-x64'">
+    <Delete Files="$(_AppBundlePath)libpjsua2.dylib;$(_AppBundlePath)libbcg729.0.dylib" ContinueOnError="true" />
+    <Message Importance="high" Text="PjSip.Net.Native.iOS: removed loose root libpjsua2.dylib (unsigned SDK copy) — the signed Frameworks/libpjsua2.framework is the runtime load path." />
+  </Target>
+
 </Project>

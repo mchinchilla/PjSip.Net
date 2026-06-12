@@ -52,6 +52,20 @@ internal static class NativeAvailability
                 Log($"Apple bundle path='{bundlePath}'");
                 if (!string.IsNullOrEmpty(bundlePath))
                 {
+                    // Device iOS ships the binary as a signed framework (a loose root dylib is
+                    // left unsigned by the SDK codesign pass → dlopen fails). Probe it first,
+                    // then the legacy loose root dylib. Mirrors NativeLoader's order.
+                    string frameworkLibPath = Path.Combine(
+                        bundlePath, "Frameworks", "libpjsua2.framework", "libpjsua2");
+                    bool frameworkLibExists = File.Exists(frameworkLibPath);
+                    Log($"frameworkLibPath='{frameworkLibPath}' exists={frameworkLibExists}");
+                    if (NativeLibrary.TryLoad(frameworkLibPath, out _))
+                    {
+                        Log("Loaded via Frameworks path");
+                        return true;
+                    }
+                    Log("TryLoad(frameworkLibPath) failed");
+
                     string bundleLibPath = Path.Combine(bundlePath, libFileName);
                     bool bundleLibExists = File.Exists(bundleLibPath);
                     Log($"bundleLibPath='{bundleLibPath}' exists={bundleLibExists}");

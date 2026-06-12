@@ -55,13 +55,25 @@ internal static class NativeLoader
                 return handle;
             }
 
-            // On iOS/Mac Catalyst, the dylib sits at the root of the .app bundle.
-            // AppContext.BaseDirectory may not point there, so resolve via NSBundle.
+            // On iOS/Mac Catalyst, resolve via NSBundle (AppContext.BaseDirectory may not
+            // point at the bundle). On device iOS the binary ships as a signed framework —
+            // Frameworks/libpjsua2.framework/libpjsua2 — because a loose root dylib is left
+            // UNSIGNED by the SDK's codesign pass (dlopen then fails → stub mode) and is
+            // rejected by App Store review anyway. Probe the framework first, then the
+            // legacy loose root dylib for older package layouts.
             if (OperatingSystem.IsIOS() || OperatingSystem.IsMacCatalyst())
             {
                 string bundlePath = GetAppleBundlePath();
                 if (!string.IsNullOrEmpty(bundlePath))
                 {
+                    string frameworkLibPath = Path.Combine(
+                        bundlePath, "Frameworks", "libpjsua2.framework", "libpjsua2");
+                    if (NativeLibrary.TryLoad(frameworkLibPath, out handle))
+                    {
+                        _resolved = true;
+                        return handle;
+                    }
+
                     string bundleLibPath = Path.Combine(bundlePath, libFileName);
                     if (NativeLibrary.TryLoad(bundleLibPath, out handle))
                     {
