@@ -493,8 +493,9 @@ jobs:
           readelf -d libpjsua2.so | grep NEEDED
           readelf -d libpjsua2.so | grep -iE 'bcg729|c\+\+_shared' && echo "ERROR: unexpected dynamic dep!" && exit 1 || echo "OK: all deps statically linked"
           echo "=== Verify 16 KB page alignment (Android 15+ / Google Play requirement) ==="
-          readelf -l libpjsua2.so | grep LOAD
-          for a in $(readelf -l libpjsua2.so | awk '/LOAD/{print $NF}'); do
+          # -W: one line per program header; without it the Align field wraps to a second line
+          readelf -lW libpjsua2.so | grep LOAD
+          for a in $(readelf -lW libpjsua2.so | awk '/LOAD/{print $NF}'); do
             if [ "$((a))" -lt 16384 ]; then
               echo "ERROR: LOAD segment aligned to $a (< 16384) — will crash on 16 KB page-size devices"
               exit 1
