@@ -476,8 +476,13 @@ jobs:
           CC="$TOOLCHAIN/bin/aarch64-linux-android28-clang++"
           pj_libs=$(find "$GITHUB_WORKSPACE/pjproject" -name "*.a" -path "*/lib/*" | tr '\n' ' ')
           echo "Linking with: $pj_libs"
-          # Link bcg729 statically and bundle libc++ statically so no extra .so needed at runtime
+          # Link bcg729 statically and bundle libc++ statically so no extra .so needed at runtime.
+          # -z max-page-size=16384: Android 15+ devices can boot with 16 KB page-size kernels
+          # (recent OnePlus etc.); a 4 KB-aligned .so fails to load there and the app crashes at
+          # startup. Also a Google Play requirement for targetSdk 35+. NDK r27 defaults to 4 KB,
+          # so the flag is required here.
           $CC -shared -static-libstdc++ -o libpjsua2.so \
+              -Wl,-z,max-page-size=16384 \
               pjsua2_wrap.o \
               $pj_libs \
               "$GITHUB_WORKSPACE/bcg729-install/lib/libbcg729.a" \
@@ -487,6 +492,15 @@ jobs:
           echo "=== Verify no unwanted dynamic dependencies ==="
           readelf -d libpjsua2.so | grep NEEDED
           readelf -d libpjsua2.so | grep -iE 'bcg729|c\+\+_shared' && echo "ERROR: unexpected dynamic dep!" && exit 1 || echo "OK: all deps statically linked"
+          echo "=== Verify 16 KB page alignment (Android 15+ / Google Play requirement) ==="
+          readelf -l libpjsua2.so | grep LOAD
+          for a in $(readelf -l libpjsua2.so | awk '/LOAD/{print $NF}'); do
+            if [ "$((a))" -lt 16384 ]; then
+              echo "ERROR: LOAD segment aligned to $a (< 16384) — will crash on 16 KB page-size devices"
+              exit 1
+            fi
+          done
+          echo "OK: all LOAD segments aligned to >= 16384"
 
       - name: Copy to runtimes
         run: |

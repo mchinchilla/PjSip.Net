@@ -111,7 +111,12 @@ pj_libs=$(find "$PJ_DIR/lib" -name "*.a" | tr '\n' ' ')
 
 mkdir -p "$OUTPUT_DIR"
 
+# -z max-page-size=16384: Android 15+ devices can boot with 16 KB page-size kernels
+# (e.g. recent OnePlus); a 4 KB-aligned .so fails to load there and the app crashes at
+# startup. Also a Google Play requirement for targetSdk 35+. NDK r28+ defaults to this,
+# but pass it explicitly so the output is correct on any NDK version.
 $CC -shared -o "$OUTPUT_DIR/libpjsua2.so" \
+    -Wl,-z,max-page-size=16384 \
     pjsua2_wrap.o \
     $pj_libs \
     -L"$OPENSSL_INSTALL/lib" -lssl -lcrypto \
