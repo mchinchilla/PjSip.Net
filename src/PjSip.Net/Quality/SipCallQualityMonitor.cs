@@ -80,7 +80,15 @@ internal sealed class SipCallQualityMonitor : ISipCallQualityMonitor
                 ? packetsLost * 100.0 / (packetsReceived + packetsLost)
                 : 0;
             int jitterMs = rx?.jitterUsec?.mean is > 0 ? rx.jitterUsec.mean / 1000 : 0;
-            int rttMs = rtcp.rttUsec?.mean is > 0 ? rtcp.rttUsec.mean / 1000 : 0;
+            // The RTT mean gets poisoned by a bogus sample taken at answer time: the
+            // remote's first RR after early media doesn't account for the ringing delay,
+            // yielding an RTT ≈ the entire ring duration (seconds). Prefer the most
+            // recent sample; if that one is itself the outlier, fall back to the minimum.
+            var rttStat = rtcp.rttUsec;
+            int rttMs = rttStat is null ? 0
+                : rttStat.last is > 0 and < 3_000_000 ? rttStat.last / 1000
+                : rttStat.min > 0 ? rttStat.min / 1000
+                : 0;
 
             // Extract codec info from stream info (best-effort)
             string? codecName = null;

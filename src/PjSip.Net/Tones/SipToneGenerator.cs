@@ -120,23 +120,27 @@ internal sealed class SipToneGenerator : ISipToneGenerator
         {
             _endpointManager.Invoker.Invoke(() =>
             {
+                // Snapshot on the invoker thread: concurrent/double Stop calls queue
+                // multiple lambdas, and the first one nulls the field — the others
+                // must see that and bail instead of dereferencing null.
+                var toneGen = _toneGen;
+                _toneGen = null;
+                if (toneGen is null) return;
+
                 try
                 {
-                    _toneGen.stop();
+                    toneGen.stop();
 
                     var ep = _endpointManager.Endpoint;
-                    if (ep is not null)
-                    {
-                        var playMedia = ep.audDevManager().getPlaybackDevMedia();
-                        _toneGen.stopTransmit(playMedia);
-                    }
+                    var playMedia = ep?.audDevManager()?.getPlaybackDevMedia();
+                    if (playMedia is not null)
+                        toneGen.stopTransmit(playMedia);
                 }
                 catch (Exception ex)
                 {
                     _logger.LogWarning(ex, "Error stopping tone generator");
                 }
-                _toneGen.Dispose();
-                _toneGen = null;
+                toneGen.Dispose();
             });
         }
     }
