@@ -30,7 +30,13 @@ internal sealed class PjSipEndpointManager : IDisposable
         _options = options.Value;
         _logger = logger;
         _loggerAdapter = loggerAdapter;
-        _invoker = new PjSipThreadSafeInvoker();
+        _invoker = new PjSipThreadSafeInvoker
+        {
+            // Keep the worker registered with pjlib so any native destructor
+            // marshalled onto it (Call/Account/Buddy disposal) never aborts via
+            // pj_thread_this(). No-op until the endpoint exists (post-libCreate).
+            BeforeAction = () => EnsureThreadRegistered("PjSip-Worker")
+        };
     }
 
     internal PjSipThreadSafeInvoker Invoker => _invoker;
@@ -116,6 +122,14 @@ internal sealed class PjSipEndpointManager : IDisposable
             }
 
             _endpoint.libStart();
+
+            // Eagerly register the .NET GC Finalizer thread with pjlib before any
+            // SWIG wrapper can be collected. Non-subclassed native wrappers
+            // (AudioMediaRecorder, ToneGenerator, AudioMedia, CallInfo …) carry
+            // finalizers we cannot suppress; if collected on an unregistered
+            // thread their destructors abort the process via pj_thread_this().
+            // The sentinel's finalizer runs once on that thread and registers it.
+            _ = new FinalizerThreadRegistrar(this);
 
             _initialized = true;
             _logger.LogInformation("PJSIP endpoint initialized successfully");
@@ -263,10 +277,66 @@ internal sealed class PjSipEndpointManager : IDisposable
         };
     }
 
+    /// <summary>
+    /// Registers the current OS thread with pjlib if it is not already known.
+    /// pjsua2 APIs (including the native destructors invoked by SWIG when a
+    /// wrapper is finalized) call <c>pj_thread_this()</c>, which aborts the
+    /// whole process via <c>pj_assert</c> when run on a thread pjlib has never
+    /// seen — e.g. the .NET GC Finalizer thread. This is a best-effort safety
+    /// net; the primary defence is suppressing the SWIG finalizers and
+    /// marshalling native disposal onto the PJSIP worker thread.
+    /// </summary>
+    internal void EnsureThreadRegistered(string threadName)
+    {
+        var endpoint = _endpoint;
+        if (endpoint is null) return;
+
+        try
+        {
+            if (endpoint.libIsThreadRegistered()) return;
+            endpoint.libRegisterThread(threadName);
+            _logger.LogDebug("Registered thread '{ThreadName}' with pjlib", threadName);
+        }
+        catch (Exception ex)
+        {
+            // Registration is itself a pjsua2 call; if pjlib is mid-shutdown it
+            // may throw. Swallow — the caller is already on a best-effort path.
+            _logger.LogDebug(ex, "Could not register thread '{ThreadName}' with pjlib", threadName);
+        }
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
         _invoker.Dispose();
+    }
+
+    /// <summary>
+    /// Throwaway object whose finalizer runs on the .NET GC Finalizer thread and
+    /// registers that thread with pjlib. It re-arms (re-registers itself for
+    /// finalization) so the registration is refreshed if pjlib is ever torn down
+    /// and recreated, and so it keeps the finalizer thread known to pjlib for the
+    /// process lifetime. Stops re-arming once the endpoint manager is disposed.
+    /// </summary>
+    private sealed class FinalizerThreadRegistrar
+    {
+        private readonly PjSipEndpointManager _owner;
+
+        public FinalizerThreadRegistrar(PjSipEndpointManager owner) => _owner = owner;
+
+        ~FinalizerThreadRegistrar()
+        {
+            if (_owner._disposed) return;
+
+            _owner.EnsureThreadRegistered("GC-Finalizer");
+
+            // Re-arm so the finalizer thread stays registered across future GCs
+            // and endpoint re-inits. GC.ReRegisterForFinalize requeues this same
+            // instance; keep cycling a fresh sentinel to avoid edge cases with
+            // re-registration on a resurrected object.
+            try { _ = new FinalizerThreadRegistrar(_owner); }
+            catch { /* shutting down */ }
+        }
     }
 }

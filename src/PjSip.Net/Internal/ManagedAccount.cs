@@ -128,8 +128,16 @@ internal sealed class ManagedAccount : ISipAccount
         {
             _logger.LogInformation("Registering account {Uri}", Uri);
 
+            // Already created natively — re-registering must refresh, not create()
+            // again (pjsua2 Account.create throws on a second call).
+            if (_native is not null && _native.getId() >= 0)
+            {
+                _native.setRegistration(true);
+                return;
+            }
+
             // Create the native bridge if not yet created
-            _native ??= new NativeAccountBridge(this, _logger);
+            _native ??= NativeAccountBridge.Create(this, _logger);
 
             using var acfg = new AccountConfig();
             var sipUser = Options.Username.Replace("@", "%40");
@@ -195,7 +203,24 @@ internal sealed class ManagedAccount : ISipAccount
                     Options.SrtpUse, Options.SrtpSecureSignaling);
             }
 
-            _native.create(acfg);
+            try
+            {
+                _native.create(acfg);
+            }
+            catch
+            {
+                // A failed create leaves the bridge with pjsua id -1; calling
+                // makeCall on it later trips a native assert and aborts the
+                // process. Tear the bridge down so the account is visibly broken.
+                var failed = _native;
+                _native = null;
+                try { failed.Dispose(); }
+                catch (Exception disposeEx) { _logger.LogWarning(disposeEx, "Error disposing account bridge after failed create"); }
+
+                RegistrationState = SipRegistrationState.Error;
+                OnRegistrationStateChanged(SipRegistrationState.Registering, SipRegistrationState.Error);
+                throw;
+            }
         });
     }
 
@@ -223,6 +248,7 @@ internal sealed class ManagedAccount : ISipAccount
     public ISipCall MakeCall(string destinationUri)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        ThrowIfNativeAccountUnusable();
         var call = new ManagedCall(this, destinationUri, CallDirection.Outgoing, _endpointManager, _logger);
         lock (_lock) _activeCalls.Add(call);
         call.StateChanged += OnCallStateChanged;
@@ -241,6 +267,7 @@ internal sealed class ManagedAccount : ISipAccount
     public ISipCall MakeCall(string destinationUri, IEnumerable<SipHeader> headers)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        ThrowIfNativeAccountUnusable();
         var call = new ManagedCall(this, destinationUri, CallDirection.Outgoing, _endpointManager, _logger, headers);
         lock (_lock) _activeCalls.Add(call);
         call.StateChanged += OnCallStateChanged;
@@ -254,6 +281,23 @@ internal sealed class ManagedAccount : ISipAccount
         }
 
         return call;
+    }
+
+    /// <summary>
+    /// Guards outgoing calls against a missing or never-created native account.
+    /// pjsua_call_make_call ASSERTS (SIGABRT, whole-process abort) when given an
+    /// invalid acc_id, so this must be caught managed-side. Account.getId() is a
+    /// plain member read, safe from any thread. Stub mode (no native binaries) is
+    /// intentionally allowed through for tests.
+    /// </summary>
+    private void ThrowIfNativeAccountUnusable()
+    {
+        if (!NativeAvailability.IsAvailable)
+            return;
+
+        if (_native is null || _native.getId() < 0)
+            throw new InvalidOperationException(
+                $"Account {Uri} has no active native registration (state={RegistrationState}); cannot place a call.");
     }
 
     internal void OnIncomingCall(ManagedCall call)
@@ -421,10 +465,25 @@ internal sealed class ManagedAccount : ISipAccount
         private readonly ManagedAccount _managed;
         private readonly ILogger _logger;
 
-        public NativeAccountBridge(ManagedAccount managed, ILogger logger) : base()
+        private NativeAccountBridge(ManagedAccount managed, ILogger logger) : base()
         {
             _managed = managed;
             _logger = logger;
+        }
+
+        /// <summary>
+        /// Creates the bridge with its SWIG finalizer suppressed. The generated
+        /// <see cref="Gen.Account"/> base finalizer runs <c>delete_Account()</c>
+        /// (→ pjsua_acc_del) on the GC Finalizer thread, which is not registered
+        /// with pjlib and would abort the process. The native account is instead
+        /// destroyed only via <see cref="ManagedAccount.Dispose"/>, which
+        /// marshals onto the PJSIP worker thread.
+        /// </summary>
+        public static NativeAccountBridge Create(ManagedAccount managed, ILogger logger)
+        {
+            var bridge = new NativeAccountBridge(managed, logger);
+            GC.SuppressFinalize(bridge);
+            return bridge;
         }
 
         public override void onRegState(OnRegStateParam prm)

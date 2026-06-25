@@ -13,6 +13,13 @@ internal sealed class PjSipThreadSafeInvoker : IDisposable
     private readonly CancellationTokenSource _cts = new();
     private volatile bool _disposed;
 
+    /// <summary>
+    /// Optional hook invoked on the worker thread before each queued action,
+    /// used to (idempotently) register the worker with pjlib so native
+    /// destructors marshalled here never trip <c>pj_thread_this()</c>.
+    /// </summary>
+    internal Action? BeforeAction { get; set; }
+
     public PjSipThreadSafeInvoker()
     {
         _pjThread = new Thread(ProcessWorkQueue)
@@ -80,6 +87,7 @@ internal sealed class PjSipThreadSafeInvoker : IDisposable
             {
                 try
                 {
+                    BeforeAction?.Invoke();
                     action();
                 }
                 catch (Exception ex)

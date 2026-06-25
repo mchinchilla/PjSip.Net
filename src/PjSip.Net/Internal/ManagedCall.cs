@@ -67,7 +67,7 @@ internal sealed class ManagedCall : ISipCall
 
         if (NativeAvailability.IsAvailable && account.Native is not null)
         {
-            _native = new NativeCallBridge(this, account.Native, nativeCallId, logger);
+            _native = NativeCallBridge.Create(this, account.Native, nativeCallId, logger);
 
             // Read call info from native
             try
@@ -192,9 +192,22 @@ internal sealed class ManagedCall : ISipCall
     /// </summary>
     internal void InitiateOutgoingCall()
     {
-        if (_account.Native is null) return;
+        var nativeAccount = _account.Native;
+        if (nativeAccount is null) return;
 
-        _native = new NativeCallBridge(this, _account.Native, _logger);
+        // pjsua_call_make_call ASSERTS (SIGABRT) on an invalid acc_id — e.g. an
+        // account whose create() failed (id -1) or that was already deleted
+        // natively. Fail the call managed-side instead of aborting the process.
+        if (nativeAccount.getId() < 0 || !nativeAccount.isValid())
+        {
+            _logger.LogError(
+                "makeCall aborted for {RemoteUri}: account native id {AccId} is not a valid pjsua account",
+                Info.RemoteUri, nativeAccount.getId());
+            SetState(SipCallState.Disconnected);
+            return;
+        }
+
+        _native = NativeCallBridge.Create(this, nativeAccount, _logger);
 
         using var prm = new CallOpParam(true);
 
@@ -659,12 +672,20 @@ internal sealed class ManagedCall : ISipCall
 
     ~ManagedCall()
     {
+        // Register the GC Finalizer thread with pjlib as a process-wide safety
+        // net: non-subclassed SWIG wrappers (AudioMediaRecorder, ToneGenerator,
+        // AudioMedia, CallInfo …) carry their own finalizers we cannot suppress,
+        // and would otherwise abort via pj_thread_this() when collected here.
+        // All finalizable objects share this one thread, so registering it once
+        // protects every native destructor that ever runs on it.
+        _endpointManager.EnsureThreadRegistered("GC-Finalizer");
+
         if (_disposed || _native is null) return;
         _disposed = true;
 
-        // GC Finalizer thread is not registered with pjlib — dispatching
-        // native disposal to the PJSIP worker thread prevents SIGABRT
-        // from pj_thread_this() assertion failure.
+        // Our own bridge has its SWIG finalizer suppressed, so it only reaches
+        // here if Dispose() was never called. Marshal native disposal to the
+        // PJSIP worker thread anyway to keep all pjsua2 calls single-threaded.
         var native = _native;
         _native = null;
         try
@@ -687,7 +708,7 @@ internal sealed class ManagedCall : ISipCall
         private readonly ILogger _logger;
 
         /// <summary>Constructor for outgoing calls.</summary>
-        public NativeCallBridge(ManagedCall managed, Gen.Account account, ILogger logger)
+        private NativeCallBridge(ManagedCall managed, Gen.Account account, ILogger logger)
             : base(account)
         {
             _managed = managed;
@@ -695,11 +716,34 @@ internal sealed class ManagedCall : ISipCall
         }
 
         /// <summary>Constructor for incoming calls with existing call ID.</summary>
-        public NativeCallBridge(ManagedCall managed, Gen.Account account, int callId, ILogger logger)
+        private NativeCallBridge(ManagedCall managed, Gen.Account account, int callId, ILogger logger)
             : base(account, callId)
         {
             _managed = managed;
             _logger = logger;
+        }
+
+        /// <summary>Creates an outgoing-call bridge with its SWIG finalizer suppressed.</summary>
+        public static NativeCallBridge Create(ManagedCall managed, Gen.Account account, ILogger logger)
+            => SuppressNativeFinalizer(new NativeCallBridge(managed, account, logger));
+
+        /// <summary>Creates an incoming-call bridge with its SWIG finalizer suppressed.</summary>
+        public static NativeCallBridge Create(ManagedCall managed, Gen.Account account, int callId, ILogger logger)
+            => SuppressNativeFinalizer(new NativeCallBridge(managed, account, callId, logger));
+
+        /// <summary>
+        /// The SWIG-generated <see cref="Gen.Call"/> base type owns a finalizer
+        /// that runs <c>delete_Call()</c> — which in C++ calls hangup() — on the
+        /// GC Finalizer thread. That thread is not registered with pjlib, so
+        /// pj_thread_this() aborts the whole process (SIGABRT). Suppress the
+        /// bridge's finalizer here so the native Call is destroyed only via
+        /// <see cref="ManagedCall.Dispose"/> / the <see cref="ManagedCall"/>
+        /// finalizer, both of which marshal onto the PJSIP worker thread.
+        /// </summary>
+        private static NativeCallBridge SuppressNativeFinalizer(NativeCallBridge bridge)
+        {
+            GC.SuppressFinalize(bridge);
+            return bridge;
         }
 
         public override void onCallState(OnCallStateParam prm)

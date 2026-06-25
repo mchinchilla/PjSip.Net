@@ -63,7 +63,7 @@ internal sealed class ManagedBuddy : ISipBuddy
 
             if (_native is null)
             {
-                _native = new NativeBuddyBridge(this, _logger);
+                _native = NativeBuddyBridge.Create(this, _logger);
 
                 using var cfg = new BuddyConfig();
                 cfg.uri = Uri;
@@ -284,10 +284,25 @@ internal sealed class ManagedBuddy : ISipBuddy
         private readonly ManagedBuddy _managed;
         private readonly ILogger _logger;
 
-        public NativeBuddyBridge(ManagedBuddy managed, ILogger logger) : base()
+        private NativeBuddyBridge(ManagedBuddy managed, ILogger logger) : base()
         {
             _managed = managed;
             _logger = logger;
+        }
+
+        /// <summary>
+        /// Creates the bridge with its SWIG finalizer suppressed. The generated
+        /// <see cref="Gen.Buddy"/> base finalizer runs <c>delete_Buddy()</c> on
+        /// the GC Finalizer thread, which is not registered with pjlib and would
+        /// abort the process. The native buddy is instead destroyed only via
+        /// <see cref="ManagedBuddy.Dispose"/> / the <see cref="ManagedBuddy"/>
+        /// finalizer, both of which marshal onto the PJSIP worker thread.
+        /// </summary>
+        public static NativeBuddyBridge Create(ManagedBuddy managed, ILogger logger)
+        {
+            var bridge = new NativeBuddyBridge(managed, logger);
+            GC.SuppressFinalize(bridge);
+            return bridge;
         }
 
         public override void onBuddyState()
