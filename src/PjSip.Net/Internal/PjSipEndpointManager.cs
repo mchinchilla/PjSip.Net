@@ -41,6 +41,7 @@ internal sealed class PjSipEndpointManager : IDisposable
 
     internal PjSipThreadSafeInvoker Invoker => _invoker;
     internal PjSipManagedEndpoint? Endpoint => _endpoint;
+    internal SipPhoneOptions Options => _options;
     internal bool IsIOS => OperatingSystem.IsIOS() && !OperatingSystem.IsMacCatalyst();
 
     internal event EventHandler<TransportStateChangedEventArgs>? TransportStateChanged;

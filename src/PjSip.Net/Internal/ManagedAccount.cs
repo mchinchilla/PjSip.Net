@@ -368,7 +368,17 @@ internal sealed class ManagedAccount : ISipAccount
     {
         var call = new ManagedCall(this, callId, _endpointManager, _logger);
         if (!string.IsNullOrEmpty(rawSipMessage))
+        {
             call.ParseSipHeaders(rawSipMessage);
+
+            // Dumped here, before the event fires, so the offer still reaches the log when
+            // pjsua rejects the call while building the SDP answer — that path never rings
+            // and leaves only a status code behind.
+            if (_endpointManager.Options.LogIncomingInvites)
+                _logger.LogInformation(
+                    "Incoming INVITE on {Uri} (callId={CallId}), secrets redacted:\n{Invite}",
+                    Uri, callId, SipMessageRedactor.Redact(rawSipMessage));
+        }
         OnIncomingCall(call);
     }
 
