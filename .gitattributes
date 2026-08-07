@@ -4,6 +4,15 @@
 * text=auto
 
 ###############################################################################
+# Patches must keep their LF endings on every platform.
+#
+# text=auto above rewrites them to CRLF when checked out on Windows, and
+# git apply then rejects them as "corrupt patch" — which is exactly how the
+# Windows native build fails while macOS and Linux apply the same patch fine.
+###############################################################################
+*.patch -text
+
+###############################################################################
 # Set default behavior for command prompt diff.
 #
 # This is need for earlier builds of msysgit that does not have it on by
