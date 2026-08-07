@@ -1,0 +1,24 @@
+--- a/pjsip/src/pjsua-lib/pjsua_call.c
++++ b/pjsip/src/pjsua-lib/pjsua_call.c
+@@ -660,7 +660,20 @@ PJ_DEF(void) pjsua_call_setting_default(pjsua_call_setting *opt)
+     pj_bzero(opt, sizeof(*opt));
+     opt->flag = 0; //PJSUA_CALL_INCLUDE_DISABLED_MEDIA;
+     opt->aud_cnt = 1;
+-    opt->txt_cnt = 1;
++    /* PjSip.Net: default RTT/T.140 text media OFF (upstream default is 1).
++     *
++     * An incoming call builds its SDP answer from this default before the
++     * application can override it, so a text stream we never use can still
++     * reject the whole call. NetSapiens SiPBx offers "m=text ... RTP/SAVP"
++     * with NO a=crypto next to a properly keyed m=audio; SDES then returns
++     * PJMEDIA_SRTP_ESDPREQCRYPTO even in OPTIONAL mode (transport_srtp_sdes.c
++     * only bypasses a crypto-less m-line when its profile is plain RTP/AVP),
++     * so the INVITE is answered 406 before it ever rings.
++     *
++     * With txt_cnt = 0 the text m-line is deactivated (port 0) and never
++     * reaches the SRTP transport. Set opt.txt_cnt back to 1 per call to
++     * negotiate RTT. */
++    opt->txt_cnt = 0;
+ 
+ #if defined(PJMEDIA_HAS_VIDEO) && (PJMEDIA_HAS_VIDEO != 0)
+     opt->vid_cnt = 1;

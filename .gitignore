@@ -375,3 +375,9 @@ native/pjproject/
 src/PjSip.Net.Native.*/runtimes/**/native/*.dylib
 src/PjSip.Net.Native.*/runtimes/**/native/*.so
 src/PjSip.Net.Native.*/runtimes/**/native/*.dll
+# ...including backups and variants. The patterns above match on the exact extension, so
+# a copy like libpjsua2.dylib.ci-backup slips through and lands in the index as a 3.8 MB
+# blob that git then keeps forever.
+src/PjSip.Net.Native.*/runtimes/**/native/*.dylib.*
+src/PjSip.Net.Native.*/runtimes/**/native/*.so.*
+src/PjSip.Net.Native.*/runtimes/**/native/*.dll.*
