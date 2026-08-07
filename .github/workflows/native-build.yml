@@ -19,6 +19,15 @@ jobs:
       - name: Clone pjproject
         run: git clone --branch 2.16 --depth 1 https://github.com/pjsip/pjproject.git pjproject
 
+      # Path is relative on purpose: $GITHUB_WORKSPACE is a backslash path on Windows
+      # runners, which git apply under Git Bash does not reliably accept.
+      - name: Apply patches
+        shell: bash
+        run: |
+          for patch in native/patches/*.patch; do
+            [ -f "$patch" ] && echo "Applying $patch" && git -C pjproject apply "../$patch"
+          done
+
       - name: Copy config_site.h
         run: copy native\config_site.h pjproject\pjlib\include\pj\config_site.h
 
@@ -374,6 +383,12 @@ jobs:
 
       - name: Clone pjproject
         run: git clone --branch 2.16 --depth 1 https://github.com/pjsip/pjproject.git pjproject
+
+      - name: Apply patches
+        run: |
+          for patch in native/patches/*.patch; do
+            [ -f "$patch" ] && echo "Applying $patch" && git -C pjproject apply "$GITHUB_WORKSPACE/$patch"
+          done
 
       - name: Copy config_site.h
         run: cp native/config_site.h pjproject/pjlib/include/pj/config_site.h
