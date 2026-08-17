@@ -22,6 +22,13 @@ internal sealed class PjSipEndpointManager : IDisposable
     private volatile bool _initialized;
     private volatile bool _disposed;
 
+    /// <summary>
+    /// pjsua transport ids returned by <c>transportCreate</c>, keyed by transport type. Accounts
+    /// need these to pin themselves to one transport — see <see cref="TryGetTransportId"/>.
+    /// Written only during <c>InitializeAsync</c> (before any account exists) and read afterwards.
+    /// </summary>
+    private readonly Dictionary<SipTransportType, int> _transportIds = [];
+
     public PjSipEndpointManager(
         IOptions<SipPhoneOptions> options,
         ILogger<PjSipEndpointManager> logger,
@@ -169,6 +176,10 @@ internal sealed class PjSipEndpointManager : IDisposable
                 _logger.LogWarning(ex, "Error destroying endpoint");
             }
 
+            // The ids belong to the destroyed endpoint; a later re-init issues fresh ones and a
+            // stale id would pin an account to a transport that no longer exists.
+            _transportIds.Clear();
+
             _endpoint = null;
             _initialized = false;
             _logger.LogInformation("PJSIP endpoint shut down");
@@ -251,11 +262,26 @@ internal sealed class PjSipEndpointManager : IDisposable
 
         var pjType = MapTransportType(transportOpt.Type);
 
+        if (transportOpt.Tls is { } tls)
+        {
+            if (IsTlsTransport(transportOpt.Type))
+                ApplyTlsConfig(cfg, tls);
+            else
+                _logger.LogWarning(
+                    "TLS options supplied for a {TransportType} transport — ignored (they only apply to TLS/TLS6)",
+                    transportOpt.Type);
+        }
+
         try
         {
-            _endpoint!.transportCreate(pjType, cfg);
-            _logger.LogInformation("Created {TransportType} transport on port {Port}",
-                transportOpt.Type, transportOpt.Port);
+            // The returned id is what an account puts in sipConfig.transportId to pin itself to
+            // this transport. Discarding it (as this did until now) leaves every account on
+            // PJSUA_INVALID_ID, which makes pjsua_init_tpselector() a no-op — so the transport of
+            // every out-of-dialog request is chosen from the target URI alone, defaulting to UDP.
+            var id = _endpoint!.transportCreate(pjType, cfg);
+            _transportIds[transportOpt.Type] = id;
+            _logger.LogInformation("Created {TransportType} transport on port {Port} (id={Id})",
+                transportOpt.Type, transportOpt.Port, id);
         }
         catch (Exception ex)
         {
@@ -263,6 +289,78 @@ internal sealed class PjSipEndpointManager : IDisposable
                 $"Failed to create {transportOpt.Type} transport on port {transportOpt.Port}", ex);
         }
     }
+
+    private static bool IsTlsTransport(SipTransportType type) =>
+        type is SipTransportType.Tls or SipTransportType.Tls6;
+
+    /// <summary>
+    /// Copies <see cref="TlsOptions"/> onto the native <c>TransportConfig.tlsConfig</c>.
+    ///
+    /// These settings used to be accepted and silently dropped: nothing ever read
+    /// <see cref="SipTransportOptions.Tls"/>, so a caller asking for certificate verification got
+    /// pjsua2's default of <c>verifyServer = false</c> and an unverified TLS connection while its
+    /// own configuration claimed otherwise.
+    ///
+    /// Trust anchors differ by platform, and that decides whether <c>VerifyServer</c> works with no
+    /// CA list (see native/config_site.h):
+    /// <list type="bullet">
+    /// <item>macOS/iOS — Apple backend: <c>SecTrustEvaluateWithError</c> against the SYSTEM trust
+    /// store, so a publicly-trusted server certificate verifies with no CA list. Supplying
+    /// <see cref="TlsOptions.CaListFile"/> calls <c>SecTrustSetAnchorCertificatesOnly</c>, which
+    /// REPLACES the system anchors — use it only for a private CA.</item>
+    /// <item>Windows — Schannel: system trust store, same as above.</item>
+    /// <item>Android — OpenSSL: PJSIP loads anchors ONLY from CA_file/CA_path/CA_buf and never
+    /// calls <c>SSL_CTX_set_default_verify_paths()</c>, so with no CA list the trust store is
+    /// EMPTY and every handshake fails. Hence the warning below.</item>
+    /// </list>
+    /// </summary>
+    private void ApplyTlsConfig(TransportConfig cfg, TlsOptions tls)
+    {
+        // SWIG returns a wrapper over the native member (cMemoryOwn=false), so writes go straight
+        // into the struct — no re-assignment back onto cfg is needed.
+        var tlsCfg = cfg.tlsConfig;
+
+        tlsCfg.verifyServer = tls.VerifyServer;
+        tlsCfg.verifyClient = tls.VerifyClient;
+
+        if (!string.IsNullOrWhiteSpace(tls.CaListFile))
+            tlsCfg.CaListFile = tls.CaListFile;
+        if (!string.IsNullOrWhiteSpace(tls.CertificateFile))
+            tlsCfg.certFile = tls.CertificateFile;
+        if (!string.IsNullOrWhiteSpace(tls.PrivateKeyFile))
+            tlsCfg.privKeyFile = tls.PrivateKeyFile;
+
+        _logger.LogInformation(
+            "TLS config: verifyServer={VerifyServer}, verifyClient={VerifyClient}, caList={CaList}, clientCert={ClientCert}",
+            tls.VerifyServer, tls.VerifyClient,
+            string.IsNullOrWhiteSpace(tls.CaListFile) ? "(system trust store)" : tls.CaListFile,
+            string.IsNullOrWhiteSpace(tls.CertificateFile) ? "(none)" : tls.CertificateFile);
+
+        if (tls.VerifyServer && string.IsNullOrWhiteSpace(tls.CaListFile) && OperatingSystem.IsAndroid())
+        {
+            _logger.LogWarning(
+                "TLS verifyServer is ON with no CaListFile on Android. PJSIP uses OpenSSL there and " +
+                "loads trust anchors ONLY from a CA list — the system store is NOT consulted, so every " +
+                "TLS handshake will fail. Supply TlsOptions.CaListFile with a PEM bundle, or turn " +
+                "verification off on this platform.");
+        }
+
+        if (!tls.VerifyServer)
+        {
+            _logger.LogWarning(
+                "TLS server certificate verification is DISABLED — the connection is encrypted but the " +
+                "server's identity is not authenticated (vulnerable to an active man-in-the-middle).");
+        }
+    }
+
+    /// <summary>
+    /// Looks up the pjsua transport id for a transport type, so an account can pin itself to it via
+    /// <c>AccountConfig.sipConfig.transportId</c>.
+    /// </summary>
+    /// <returns>False when no transport of that type was created — the caller must then leave the
+    /// account on PJSUA_INVALID_ID rather than guess, and should say so in the log.</returns>
+    internal bool TryGetTransportId(SipTransportType type, out int transportId) =>
+        _transportIds.TryGetValue(type, out transportId);
 
     internal static pjsip_transport_type_e MapTransportType(SipTransportType type)
     {

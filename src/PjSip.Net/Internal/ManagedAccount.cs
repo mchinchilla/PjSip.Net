@@ -90,6 +90,54 @@ internal sealed class ManagedAccount : ISipAccount
     }
 
     /// <summary>
+    /// The transport this account is configured to use, or null when it expressed no preference
+    /// (no <see cref="SipAccountOptions.Transport"/> and <c>UseTls</c> false) — in that case PJSIP's
+    /// own URI-driven selection is left alone.
+    /// </summary>
+    private SipTransportType? ResolveTransportType() =>
+        Options.Transport ?? (Options.UseTls ? SipTransportType.Tls : null);
+
+    /// <summary>
+    /// Pins the account to its transport via <c>sipConfig.transportId</c>.
+    ///
+    /// Without this every account sits on PJSUA_INVALID_ID, which makes
+    /// <c>pjsua_init_tpselector()</c> (pjsua_core.c) return without setting a selector — so PJSIP
+    /// derives the transport of each out-of-dialog request from the target URI alone, and a URI
+    /// with no <c>;transport=</c> param falls back to UDP (RFC 3263, sip_resolve.c). On a TLS
+    /// account that silently sent buddy SUBSCRIBE, MWI SUBSCRIBE and MESSAGE out over UDP while
+    /// REGISTER and INVITE (which carry the suffix) worked — presence stayed dead with 401/408.
+    ///
+    /// The transport-param suffixes remain as a second line of defence: they also stop DNS SRV from
+    /// picking a different transport for the *target*, which the selector does not govern.
+    /// </summary>
+    private void ApplyTransportId(AccountConfig acfg)
+    {
+        var type = ResolveTransportType();
+        if (type is null)
+        {
+            _logger.LogDebug("Account {Uri}: no transport preference — leaving PJSIP URI-based selection", Uri);
+            return;
+        }
+
+        if (_endpointManager.TryGetTransportId(type.Value, out var transportId))
+        {
+            acfg.sipConfig.transportId = transportId;
+            _logger.LogInformation("Account {Uri} pinned to {Transport} transport (id={Id})",
+                Uri, type.Value, transportId);
+        }
+        else
+        {
+            // Guessing an id here would pin the account to the wrong transport, which is worse than
+            // the URI-driven default. Loud, because it means the caller asked for a transport it
+            // never created and everything this account sends will pick its own transport.
+            _logger.LogWarning(
+                "Account {Uri} wants {Transport} but no such transport was created — " +
+                "requests will fall back to URI-based transport selection (UDP unless the URI says otherwise)",
+                Uri, type.Value);
+        }
+    }
+
+    /// <summary>
     /// Normalizes Contact-URI params for pjsua2 <c>regConfig.contactUriParams</c>: trims, returns
     /// null for null/empty/whitespace, and ensures exactly one leading ';' (PJSIP appends the value
     /// raw to the Contact URI and expects the leading separator). Used for RFC 8599 push params.
@@ -169,6 +217,9 @@ internal sealed class ManagedAccount : ISipAccount
             _logger.LogInformation(
                 "Account config: id={Id}, registrar={Registrar}, transport={Transport}",
                 acfg.idUri, acfg.regConfig.registrarUri, transportSuffix.Length > 0 ? transportSuffix : "(default)");
+
+            // Must run before create(): pjsua reads sipConfig.transportId when the account is added.
+            ApplyTransportId(acfg);
 
             // Outbound proxy
             if (!string.IsNullOrEmpty(Options.OutboundProxy))
