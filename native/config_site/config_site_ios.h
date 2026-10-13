@@ -70,10 +70,16 @@
 #define PJMEDIA_AUDIO_DEV_HAS_PORTAUDIO 0
 #define PJMEDIA_AUDIO_DEV_HAS_WMME      0
 
-/* iOS background audio — use PushKit for modern iOS (13+).
- * Setting to 0 prevents PJSIP from maintaining background sockets
- * which can interfere with iOS audio session management. */
-#define PJ_IPHONE_OS_HAS_MULTITASKING_SUPPORT  0
+/* Recover sockets that iOS reclaims while the app is suspended (pjproject ticket #1107).
+ * This macro does NOT keep sockets alive in the background (that is
+ * PJ_ACTIVESOCK_TCP_IPHONE_OS_BG below, kept at 0 — the deprecated VoIP-socket mode that gets the
+ * app killed on iOS 16+). It enables: replace_udp_sock() on ENOTCONN/EPIPE in the ioqueue,
+ * SO_NOSIGPIPE on UDP sockets, and the STUN EPIPE retry.
+ * It used to be 0, which compiled all of that out: when iOS reclaimed the UDP transport socket,
+ * every recvfrom() failed immediately with ENOTCONN and was re-posted in a tight loop — TekiumPhone
+ * on an iPhone logged 128,543 "pj_ioqueue_recvfrom: Socket is not connected" lines in ~5 min. */
+#define PJ_IPHONE_OS_HAS_MULTITASKING_SUPPORT  1
+#define PJ_ACTIVESOCK_TCP_IPHONE_OS_BG         0
 
 /* Enable activation of the iOS audio session on incoming calls. */
 #define PJSUA_DETECT_MERGED_REQUESTS    1
