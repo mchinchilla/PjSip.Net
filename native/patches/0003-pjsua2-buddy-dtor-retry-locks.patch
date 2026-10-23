@@ -1,0 +1,81 @@
+diff --git a/pjsip/src/pjsua2/presence.cpp b/pjsip/src/pjsua2/presence.cpp
+index f02414618..37a542459 100644
+--- a/pjsip/src/pjsua2/presence.cpp
++++ b/pjsip/src/pjsua2/presence.cpp
+@@ -18,6 +18,7 @@
+ #include <pjsua2/presence.hpp>
+ #include <pjsua2/account.hpp>
+ #include "util.hpp"
++#include <pjsua-lib/pjsua_internal.h>   /* For pjsua_var (~Buddy) */
+ 
+ using namespace pj;
+ using namespace std;
+@@ -102,19 +103,59 @@ Buddy *Buddy::getOriginalInstance()
+ 
+ /*
+  * Destructor.
++ *
++ * PjSip.Net patch: pjsua_buddy_get_user_data(), pjsua_buddy_set_user_data()
++ * and pjsua_buddy_del() only *try* to lock the PJSUA/dialog mutexes (~100 ms
++ * budget) and give up silently on contention. The stock destructor then let
++ * this object be freed while the PJSUA buddy slot survived with a user_data
++ * still pointing here, and the next NOTIFY on that subscription called a
++ * virtual method on freed memory (SIGSEGV in Endpoint::on_buddy_evsub_state).
++ * Retry each step, and never return while the slot can still reach us.
+  */
+ Buddy::~Buddy()
+ {
+-    if (isValid() && getOriginalInstance()==this) {
+-        Account *acc = NULL;
+-        BuddyUserData *bud = (BuddyUserData*)pjsua_buddy_get_user_data(id);
+-        if (bud) {
+-            acc = bud->acc;
+-            delete bud;
++    enum { MAX_ATTEMPTS = 40, RETRY_SLEEP_MS = 50 };
++    unsigned i;
++
++    if (!isValid())
++        return;
++
++    /* Unlocked peek, only to tell the original instance apart from the
++     * temporary Buddy(id) copies made in the Endpoint callbacks: a locked
++     * read returns NULL on timeout and the copies would stall retrying. */
++    BuddyUserData *bud =
++        (BuddyUserData*)*(void * volatile *)&pjsua_var.buddy[id].user_data;
++    if (!bud || bud->self != this)
++        return;
++
++    {
++        Account *acc = bud->acc;
++        pj_status_t status = PJ_ETIMEDOUT;
++
++        /* Once this succeeds no callback for this buddy is in flight (it
++         * needs the dialog lock they hold) and later ones see NULL. */
++        for (i = 0; i < MAX_ATTEMPTS && status != PJ_SUCCESS; ++i) {
++            if (i) pj_thread_sleep(RETRY_SLEEP_MS);
++            status = pjsua_buddy_set_user_data(id, NULL);
++        }
++        if (status != PJ_SUCCESS) {
++            PJ_LOG(2,(THIS_FILE, "Buddy %d: could not lock to clear user "
++                      "data, clearing it unlocked", id));
++            *(void * volatile *)&pjsua_var.buddy[id].user_data = NULL;
++        }
++        delete bud;
++
++        /* A buddy left behind with NULL user data is ignored by the
++         * Endpoint callbacks, so a failure here only leaks the slot. */
++        status = PJ_ETIMEDOUT;
++        for (i = 0; i < MAX_ATTEMPTS && status != PJ_SUCCESS; ++i) {
++            if (i) pj_thread_sleep(RETRY_SLEEP_MS);
++            status = pjsua_buddy_del(id);
++        }
++        if (status != PJ_SUCCESS) {
++            PJ_LOG(2,(THIS_FILE, "Buddy %d: pjsua_buddy_del() failed "
++                      "(status=%d), slot leaked", id, status));
+         }
+-
+-        pjsua_buddy_set_user_data(id, NULL);
+-        pjsua_buddy_del(id);
+ 
+ #if !DEPRECATED_FOR_TICKET_2232
+         /* Remove from account buddy list */
