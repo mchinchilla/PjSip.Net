@@ -16,6 +16,7 @@ jobs:
     permissions:
       contents: write
       actions: read
+      id-token: write  # OIDC token for NuGet.org Trusted Publishing
 
     steps:
       - uses: actions/checkout@v6
@@ -153,13 +154,24 @@ jobs:
           name: nuget-packages
           path: artifacts/*
 
+      # Trusted Publishing: exchanges the GitHub OIDC token for a short-lived
+      # (1h) NuGet API key. Policy configured at nuget.org -> Trusted Publishing
+      # (owner mchinchilla73, repo mchinchilla/PjSip.Net, workflow release.yml).
+      - name: NuGet login (OIDC)
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: mchinchilla73
+
       - name: Push to NuGet.org
         shell: pwsh
+        env:
+          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
         run: |
           foreach ($pkg in Get-ChildItem artifacts/*.nupkg) {
             Write-Host "Pushing $($pkg.Name)..."
             dotnet nuget push $pkg.FullName `
-              --api-key ${{ secrets.NUGET_API_KEY }} `
+              --api-key $env:NUGET_API_KEY `
               --source https://api.nuget.org/v3/index.json `
               --skip-duplicate
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
