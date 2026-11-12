@@ -156,7 +156,11 @@ jobs:
           path: pjproject/pjsip-apps/src/swig/csharp/*.cs
 
   build-macos-arm64:
-    runs-on: macos-14
+    runs-on: macos-15
+    env:
+      # Pinned so the dylib keeps loading on macOS 14; without it the deployment
+      # target silently follows the runner image's SDK.
+      MACOSX_DEPLOYMENT_TARGET: "14.0"
     steps:
       - uses: actions/checkout@v6
 
@@ -247,6 +251,10 @@ jobs:
               -lpthread
           echo "=== Verify no dynamic bcg729 dependency ==="
           otool -L libpjsua2.dylib | grep -i bcg729 && echo "ERROR: bcg729 still dynamic!" && exit 1 || echo "OK: bcg729 statically linked"
+          echo "=== Verify deployment target ==="
+          ACTUAL_MIN="$(xcrun vtool -show-build libpjsua2.dylib | awk '/minos/ {print $2; exit}')"
+          [ "$ACTUAL_MIN" = "$MACOSX_DEPLOYMENT_TARGET" ] || { echo "ERROR: deployment target is $ACTUAL_MIN, expected $MACOSX_DEPLOYMENT_TARGET"; exit 1; }
+          echo "OK: minos $ACTUAL_MIN"
 
       - name: Copy to runtimes
         run: |
@@ -261,7 +269,11 @@ jobs:
           path: src/PjSip.Net.Native.MacOS/runtimes/osx-arm64/native/libpjsua2.dylib
 
   build-macos-x64:
-    runs-on: macos-14
+    runs-on: macos-15
+    env:
+      # Pinned so the dylib keeps loading on macOS 14; without it the deployment
+      # target silently follows the runner image's SDK.
+      MACOSX_DEPLOYMENT_TARGET: "14.0"
     steps:
       - uses: actions/checkout@v6
 
@@ -354,6 +366,10 @@ jobs:
               -lpthread
           echo "=== Verify no dynamic bcg729 dependency ==="
           otool -L libpjsua2.dylib | grep -i bcg729 && echo "ERROR: bcg729 still dynamic!" && exit 1 || echo "OK: bcg729 statically linked"
+          echo "=== Verify deployment target ==="
+          ACTUAL_MIN="$(xcrun vtool -show-build libpjsua2.dylib | awk '/minos/ {print $2; exit}')"
+          [ "$ACTUAL_MIN" = "$MACOSX_DEPLOYMENT_TARGET" ] || { echo "ERROR: deployment target is $ACTUAL_MIN, expected $MACOSX_DEPLOYMENT_TARGET"; exit 1; }
+          echo "OK: minos $ACTUAL_MIN"
 
       - name: Copy to runtimes
         run: |
@@ -531,7 +547,7 @@ jobs:
           path: src/PjSip.Net.Native.Android/runtimes/android-arm64/native/libpjsua2.so
 
   build-ios:
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v6
 
