@@ -1,0 +1,24 @@
+diff --git a/pjsip/src/pjsua-lib/pjsua_acc.c b/pjsip/src/pjsua-lib/pjsua_acc.c
+index 526cb392d..43955266f 100644
+--- a/pjsip/src/pjsua-lib/pjsua_acc.c
++++ b/pjsip/src/pjsua-lib/pjsua_acc.c
+@@ -1702,7 +1702,18 @@ done:
+             reg_contact.ptr = (char*) pj_pool_alloc(acc->pool, len);
+ 
+             pj_strcpy(&reg_contact, &acc->contact);
+-        
++
++            /* PjSip.Net patch: pj_strcpy() does not NUL-terminate and the
++             * pool memory is not zeroed, but pjsip_parse_hdr() below MUST be
++             * given a NUL-terminated buffer. With leftover bytes after the
++             * copy the parse failed and the assertion aborted the process
++             * (seen when acc_check_nat_addr() rewrites the Contact of an
++             * account that has reg_contact_uri_params, e.g. RFC 8599 push
++             * params). 'len' includes a 5-byte allowance, so this is in
++             * bounds.
++             */
++            reg_contact.ptr[reg_contact.slen] = '\0';
++
+             /* Contact URI params */
+             if (acc->cfg.reg_contact_uri_params.slen) {
+                 pj_pool_t *pool;
