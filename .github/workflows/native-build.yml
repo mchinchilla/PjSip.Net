@@ -204,11 +204,16 @@ jobs:
           # Build each library module individually to continue past test binary link failures
           for dir in pjlib pjlib-util pjnath third_party pjmedia pjsip; do
             echo "=== Building $dir ==="
-            make -C "$dir/build" -j$CPUS || echo "WARNING: $dir build had errors (test binary link failures are OK)"
+            # Retry once: pjproject's rules.mak creates the object dir in parallel with the
+            # first compiles, so a -j build can lose that race; the second pass finds the dir.
+            make -C "$dir/build" -j$CPUS || make -C "$dir/build" -j$CPUS \
+              || echo "WARNING: $dir build had errors (test binary link failures are OK)"
           done
           echo "=== Built libraries ==="
           find . -name "*.a" -path "*/lib/*"
-          test -n "$(find . -name '*.a' -path '*/lib/*' -print -quit)" || { echo "ERROR: No .a libraries found"; exit 1; }
+          for lib in pj pjlib-util pjnath pjmedia pjmedia-codec pjsip pjsua pjsua2; do
+            test -n "$(find . -name "lib${lib}-*.a" -path '*/lib/*' -print -quit)" || { echo "ERROR: lib${lib} was not built"; exit 1; }
+          done
 
       - name: Run SWIG
         run: |
@@ -319,11 +324,16 @@ jobs:
           CPUS=$(sysctl -n hw.logicalcpu)
           for dir in pjlib pjlib-util pjnath third_party pjmedia pjsip; do
             echo "=== Building $dir ==="
-            make -C "$dir/build" -j$CPUS || echo "WARNING: $dir build had errors"
+            # Retry once: pjproject's rules.mak creates the object dir in parallel with the
+            # first compiles, so a -j build can lose that race; the second pass finds the dir.
+            make -C "$dir/build" -j$CPUS || make -C "$dir/build" -j$CPUS \
+              || echo "WARNING: $dir build had errors (test binary link failures are OK)"
           done
           echo "=== Built libraries ==="
           find . -name "*.a" -path "*/lib/*"
-          test -n "$(find . -name '*.a' -path '*/lib/*' -print -quit)" || { echo "ERROR: No .a libraries found"; exit 1; }
+          for lib in pj pjlib-util pjnath pjmedia pjmedia-codec pjsip pjsua pjsua2; do
+            test -n "$(find . -name "lib${lib}-*.a" -path '*/lib/*' -print -quit)" || { echo "ERROR: lib${lib} was not built"; exit 1; }
+          done
 
       - name: Run SWIG
         run: |
@@ -462,11 +472,16 @@ jobs:
           CPUS=$(nproc)
           for dir in pjlib pjlib-util pjnath third_party pjmedia pjsip; do
             echo "=== Building $dir ==="
-            make -C "$dir/build" -j$CPUS || echo "WARNING: $dir build had errors"
+            # Retry once: pjproject's rules.mak creates the object dir in parallel with the
+            # first compiles, so a -j build can lose that race; the second pass finds the dir.
+            make -C "$dir/build" -j$CPUS || make -C "$dir/build" -j$CPUS \
+              || echo "WARNING: $dir build had errors (test binary link failures are OK)"
           done
           echo "=== Built libraries ==="
           find . -name "*.a" -path "*/lib/*"
-          test -n "$(find . -name '*.a' -path '*/lib/*' -print -quit)" || { echo "ERROR: No .a libraries found"; exit 1; }
+          for lib in pj pjlib-util pjnath pjmedia pjmedia-codec pjsip pjsua pjsua2; do
+            test -n "$(find . -name "lib${lib}-*.a" -path '*/lib/*' -print -quit)" || { echo "ERROR: lib${lib} was not built"; exit 1; }
+          done
 
       - name: Run SWIG
         run: |
@@ -603,11 +618,16 @@ jobs:
           CPUS=$(sysctl -n hw.logicalcpu)
           for dir in pjlib pjlib-util pjnath third_party pjmedia pjsip; do
             echo "=== Building $dir ==="
-            make -C "$dir/build" -j$CPUS || echo "WARNING: $dir build had errors"
+            # Retry once: pjproject's rules.mak creates the object dir in parallel with the
+            # first compiles, so a -j build can lose that race; the second pass finds the dir.
+            make -C "$dir/build" -j$CPUS || make -C "$dir/build" -j$CPUS \
+              || echo "WARNING: $dir build had errors (test binary link failures are OK)"
           done
           echo "=== Built libraries ==="
           find . -name "*.a" -path "*/lib/*"
-          test -n "$(find . -name '*.a' -path '*/lib/*' -print -quit)" || { echo "ERROR: No .a libraries found"; exit 1; }
+          for lib in pj pjlib-util pjnath pjmedia pjmedia-codec pjsip pjsua pjsua2; do
+            test -n "$(find . -name "lib${lib}-*.a" -path '*/lib/*' -print -quit)" || { echo "ERROR: lib${lib} was not built"; exit 1; }
+          done
 
       - name: Compile BCG729 codec into pjmedia-codec
         run: |
